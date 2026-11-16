@@ -1,0 +1,61 @@
+{% extends 'billing/base.html' %}
+
+{% block title %}Subiekt 123{% endblock %}
+
+{% block content %}
+<h1>Subiekt 123</h1>
+
+{% if connection %}
+<section class="panel">
+  <h3>Połączono</h3>
+  <p>
+    {% if connection.account %}Konto InsERT: <strong>{{ connection.account }}</strong><br>{% endif %}
+    Połączono: {{ connection.connected_at|date:"j.m.Y H:i" }}<br>
+    Token ważny do: {{ connection.expires_at|date:"j.m.Y H:i" }} (aplikacja odnawia go sama)
+  </p>
+  <div class="toolbar">
+    <a class="button primary" href="{% url 'subiekt' %}?sprawdz=1">Sprawdź klientów w Subiekcie</a>
+    <a class="button" href="{% url 'subiekt_connect' %}">Połącz ponownie</a>
+    <form method="post" action="{% url 'subiekt_disconnect' %}" class="inline">
+      {% csrf_token %}
+      <button type="submit">Rozłącz</button>
+    </form>
+  </div>
+</section>
+{% else %}
+<section class="panel warn">
+  <h3>Nie połączono</h3>
+  <p>Zaloguj się kontem InsERT i zezwól aplikacji na dostęp do Subiekta 123. Wystarczy raz.</p>
+  <a class="button primary" href="{% url 'subiekt_connect' %}">Połącz z Subiektem</a>
+</section>
+{% endif %}
+
+{% if error %}
+<section class="panel warn">
+  <h3>Błąd</h3>
+  <p>{{ error }}</p>
+</section>
+{% endif %}
+
+{% if rows is not None %}
+<h2>Klienci aplikacji w Subiekcie (według NIP)</h2>
+<p class="muted small">Kontrahentów w Subiekcie: {{ total }}. Tylko odczyt, aplikacja niczego nie zmienia.</p>
+<table class="data">
+  <thead>
+    <tr><th>Klient w aplikacji</th><th>NIP</th><th>Kontrahent w Subiekcie</th></tr>
+  </thead>
+  <tbody>
+    {% for client, nip, matches in rows %}
+    <tr{% if not matches or matches|length > 1 %} class="row-warn"{% endif %}>
+      <td>{{ client.name }}</td>
+      <td>{% if nip %}{{ nip }}{% else %}<span class="missing">brak</span>{% endif %}</td>
+      <td>
+        {% for item in matches %}{{ item.name }} (id {{ item.id }}){% if not forloop.last %}<br>{% endif %}{% empty %}<span class="missing">nie znaleziono</span>{% endfor %}
+        {% if matches|length > 1 %}<br><span class="badge warn">kilku kontrahentów z tym NIP</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

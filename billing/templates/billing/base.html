@@ -1,0 +1,31 @@
+{% load static %}<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}abofaktury{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'billing/style.css' %}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{% url 'index' %}">abofaktury</a>
+    <nav>
+      <a href="{% url 'index' %}">Rozliczenia</a>
+      <a href="{% url 'admin:billing_client_changelist' %}">Konfiguracja klientów</a>
+      <a href="{% url 'subiekt' %}">Subiekt</a>
+      <form method="post" action="{% url 'admin:logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="link">Wyloguj ({{ request.user.get_username }})</button>
+      </form>
+    </nav>
+  </header>
+  <main>
+    {% if messages %}
+    {% for message in messages %}
+    <div class="panel{% if message.level_tag == 'error' %} warn{% endif %}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

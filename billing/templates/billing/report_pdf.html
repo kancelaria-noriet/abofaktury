@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Raport - {{ client.name }} - {{ result.work_month.label }}</title>
+  <style>
+    @page { size: A4; margin: 18mm 15mm; }
+    body { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; font-size: 10pt; color: #000; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 0.5pt solid #444; padding: 4pt 6pt; vertical-align: top; text-align: left; }
+    th { background: #e8e8e8; font-weight: bold; }
+    .hours { width: 28mm; text-align: right; white-space: nowrap; }
+    tr { page-break-inside: avoid; }
+  </style>
+</head>
+<body>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ result.work_month.label|upper }}</th>
+        <th class="hours">ILOŚĆ GODZIN</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in result.entries %}
+      <tr>
+        <td>{{ entry.description }}{% if entry.expense is not None %} - {{ entry.expense|floatformat:"2g" }} zł{% endif %}</td>
+        <td class="hours">{% if entry.hours is not None %}{{ entry.hours|floatformat:"-1" }}{% elif entry.raw_hours is not None %}{{ entry.raw_hours }}{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="2">Brak wpisów.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,267 @@
+{% extends 'billing/base.html' %}
+
+{% block title %}Rozliczenia - {{ month.label }}{% endblock %}
+
+{% block content %}
+<h1>Rozliczenia - {{ month.label }}</h1>
+<p class="muted">
+  Abonament za <strong>{{ month.label }}</strong>,
+  nadgodziny i koszty za <strong>{{ work_month.label }}</strong>.
+</p>
+
+<div class="toolbar">
+  <a class="button" href="{% url 'month' month.previous.key %}">&larr; {{ month.previous.label }}</a>
+  <form method="get" action="{% url 'go_to_month' %}" class="inline">
+    <input type="month" name="m" value="{{ month.key }}" aria-label="Miesiąc faktury" required>
+    <button type="submit">Pokaż</button>
+  </form>
+  <a class="button" href="{% url 'month' month.next.key %}">{{ month.next.label }} &rarr;</a>
+  <a class="button" href="{% url 'index' %}">Bieżący miesiąc</a>
+  <span class="spacer"></span>
+  <a class="button primary" href="{% url 'month' month.key %}">Generuj ponownie</a>
+  <span class="muted small">Dane z arkusza wczytane: {{ generated_at|time:"H:i:s" }}.
+    <a href="{% url 'subiekt' %}">Subiekt: {% if subiekt %}połączono{% else %}nie połączono{% endif %}</a></span>
+</div>
+
+{% if source_error %}
+<section class="panel warn">
+  <h3>Nie można odczytać arkusza</h3>
+  <p>{{ source_error }}</p>
+  <p>Kliknij „Generuj ponownie”, aby spróbować jeszcze raz.</p>
+</section>
+{% endif %}
+
+<h2>Podsumowanie</h2>
+<table class="data">
+  <thead>
+    <tr>
+      <th>Klient</th>
+      <th class="num">Godziny ({{ work_month.label }})</th>
+      <th class="num">W abonamencie</th>
+      <th class="num">Nadgodziny</th>
+      <th class="num">Netto</th>
+      <th class="num">VAT</th>
+      <th class="num">Brutto</th>
+      <th>Ostrzeżenia</th>
+      <th>Raport</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for client, result in rows %}
+    <tr>
+      <td><a href="#klient-{{ client.key }}">{{ client.name }}</a></td>
+      <td class="num">{{ result.hours_total|floatformat:"-1" }}</td>
+      <td class="num">{{ result.included_hours|floatformat:"-1" }}</td>
+      <td class="num">
+        {% if result.overtime_hours %}<strong>{{ result.overtime_hours|floatformat:"-1" }}</strong>{% else %}0{% endif %}
+        {% if result.period > 1 %}<br><span class="muted small">{% if result.settlement %}rozliczenie okresu{% else %}rozliczenie: {{ result.settlement_invoice_month.label }}{% endif %}</span>{% endif %}
+      </td>
+      <td class="num">{{ result.net|floatformat:"2g" }}</td>
+      <td class="num">{{ result.vat|floatformat:"2g" }}</td>
+      <td class="num">{{ result.gross|floatformat:"2g" }}</td>
+      <td>
+        {% if result.warnings %}
+        <a class="badge warn" href="#klient-{{ client.key }}">{{ result.warnings|length }}</a>
+        {% else %}
+        <span class="badge ok">OK</span>
+        {% endif %}
+      </td>
+      <td><a href="{% url 'report_pdf' month.key client.key %}">PDF</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="9" class="muted">Brak aktywnych klientów. Dodaj klientów w konfiguracji.</td></tr>
+    {% endfor %}
+  </tbody>
+  {% if rows %}
+  <tfoot>
+    <tr>
+      <th>Razem</th>
+      <th class="num">{{ totals.hours_total|floatformat:"-1" }}</th>
+      <th></th>
+      <th class="num">{{ totals.overtime_hours|floatformat:"-1" }}</th>
+      <th class="num">{{ totals.net|floatformat:"2g" }}</th>
+      <th class="num">{{ totals.vat|floatformat:"2g" }}</th>
+      <th class="num">{{ totals.gross|floatformat:"2g" }}</th>
+      <th>{{ totals.warnings }}</th>
+      <th></th>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+
+{% if totals.warnings %}
+<section id="ostrzezenia" class="panel warn">
+  <h2>Ostrzeżenia ({{ totals.warnings }})</h2>
+  <ul>
+    {% for client, result in rows %}{% for warning in result.warnings %}
+    <li><a href="#klient-{{ client.key }}">{{ client.name }}</a>: {{ warning }}</li>
+    {% endfor %}{% endfor %}
+  </ul>
+  <p class="small">Popraw dane w arkuszu i kliknij „Generuj ponownie”.</p>
+</section>
+{% endif %}
+
+{% for client, result in rows %}
+<section id="klient-{{ client.key }}" class="client">
+  <div class="client-head">
+    <h2>{{ client.name }}</h2>
+    <span class="spacer"></span>
+    <a class="button primary" href="{% url 'report_pdf' month.key client.key %}">Raport PDF</a>
+    <a class="button" href="{% url 'admin:billing_client_change' client.pk %}">Edytuj klienta</a>
+    <a class="small" href="#">do góry &uarr;</a>
+  </div>
+
+  {% if result.warnings %}
+  <div class="panel warn">
+    <ul>{% for warning in result.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div class="columns">
+    <div class="panel">
+      <h3>Nabywca</h3>
+      <p>
+        <strong>{{ client.name }}</strong><br>
+        {% if client.address %}{{ client.address|linebreaksbr }}<br>{% else %}<span class="missing">brak adresu</span><br>{% endif %}
+        NIP: {% if client.nip %}{{ client.nip }}{% else %}<span class="missing">brak</span>{% endif %}
+      </p>
+    </div>
+    <div class="panel">
+      <h3>Warunki</h3>
+      <p>
+        Abonament: {{ client.subscription_net|floatformat:"2g" }} zł netto<br>
+        Godziny w abonamencie: {{ client.included_hours|floatformat:"-1" }}<br>
+        Stawka za nadgodzinę: {{ client.overtime_rate_net|floatformat:"2g" }} zł netto<br>
+        Rozliczanie nadgodzin: {{ client.get_overtime_period_months_display }}
+      </p>
+    </div>
+    <div class="panel">
+      <h3>Godziny - {{ result.work_month.label }}</h3>
+      <p>
+        Przepracowane: {{ result.hours_total|floatformat:"-1" }}<br>
+        W abonamencie: {{ result.included_hours|floatformat:"-1" }}<br>
+        Nadgodziny na tej fakturze: <strong>{{ result.overtime_hours|floatformat:"-1" }}</strong>
+      </p>
+    </div>
+  </div>
+
+  {% if result.period > 1 %}
+  <h3>Okres rozliczeniowy: {{ result.period_first.label }} - {{ result.period_last.label }}</h3>
+  <p class="muted small">
+    {% if result.settlement %}
+    Ta faktura rozlicza nadgodziny całego okresu.
+    {% else %}
+    Nadgodziny z tego okresu będą na fakturze za {{ result.settlement_invoice_month.label }}.
+    {% endif %}
+  </p>
+  <table class="data">
+    <thead>
+      <tr><th>Miesiąc</th><th class="num">Godziny</th><th class="num">W abonamencie</th></tr>
+    </thead>
+    <tbody>
+      {% for row in result.period_rows %}
+      <tr>
+        <td>{{ row.month.label }}</td>
+        <td class="num">{{ row.hours|floatformat:"-1" }}</td>
+        <td class="num">{{ row.included|floatformat:"-1" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th>Razem dotychczas</th>
+        <th class="num">{{ result.period_hours|floatformat:"-1" }}</th>
+        <th class="num">{{ result.period_included_so_far|floatformat:"-1" }}</th>
+      </tr>
+      <tr>
+        {% if result.period_excess %}
+        <th>Ponad abonament w okresie ({{ result.period_included|floatformat:"-1" }} h w całym okresie)</th>
+        <th class="num"><strong>{{ result.period_excess|floatformat:"-1" }}</strong></th>
+        {% else %}
+        <th>Pozostało w okresie ({{ result.period_included|floatformat:"-1" }} h w całym okresie)</th>
+        <th class="num">{{ result.period_balance|floatformat:"-1" }}</th>
+        {% endif %}
+        <th></th>
+      </tr>
+    </tfoot>
+  </table>
+  {% endif %}
+
+  <h3>Pozycje faktury</h3>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Lp.</th>
+        <th>Nazwa</th>
+        <th class="num">Ilość</th>
+        <th>J.m.</th>
+        <th class="num">Cena netto</th>
+        <th class="num">Netto</th>
+        <th class="num">VAT</th>
+        <th class="num">Brutto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in result.lines %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ line.name }}{% if line.note %} <span class="badge">{{ line.note }}</span>{% endif %}</td>
+        <td class="num">{{ line.quantity|floatformat:"-1" }}</td>
+        <td>{{ line.unit }}</td>
+        <td class="num">{{ line.unit_net|floatformat:"2g" }}</td>
+        <td class="num">{{ line.net|floatformat:"2g" }}</td>
+        <td class="num">{{ line.vat|floatformat:"2g" }}</td>
+        <td class="num">{{ line.gross|floatformat:"2g" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="muted">Brak pozycji.</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="5">Razem</th>
+        <th class="num">{{ result.net|floatformat:"2g" }}</th>
+        <th class="num">{{ result.vat|floatformat:"2g" }}</th>
+        <th class="num">{{ result.gross|floatformat:"2g" }}</th>
+      </tr>
+      {% if result.paid %}
+      <tr>
+        <th colspan="7">Zapłacono (KZP - tylko VAT)</th>
+        <th class="num">{{ result.paid|floatformat:"2g" }}</th>
+      </tr>
+      <tr>
+        <th colspan="7">Do zapłaty</th>
+        <th class="num">{{ result.to_pay|floatformat:"2g" }}</th>
+      </tr>
+      {% endif %}
+    </tfoot>
+  </table>
+
+  <h3>Wpisy - {{ result.work_month.label }}</h3>
+  <table class="data">
+    <thead>
+      <tr><th>Czynność</th><th class="num">Godziny</th></tr>
+    </thead>
+    <tbody>
+      {% for entry in result.entries %}
+      <tr{% if entry.warning %} class="row-warn"{% endif %}>
+        <td>
+          {{ entry.description }}
+          {% if entry.expense is not None %}<span class="badge">koszt: {{ entry.expense|floatformat:"2g" }} zł</span>{% endif %}
+        </td>
+        <td class="num">
+          {% if entry.hours is not None %}{{ entry.hours|floatformat:"-1" }}{% elif entry.warning %}<span class="missing">{{ entry.raw_hours|default:"brak" }}</span>{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="2" class="muted">Brak wpisów.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+
+<p class="muted small">
+  Wersja demonstracyjna: dane z pliku demo, ceny netto, VAT 23% dla wszystkich pozycji.
+</p>
+{% endblock %}

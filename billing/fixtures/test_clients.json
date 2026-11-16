@@ -1,0 +1,82 @@
+[
+  {
+    "model": "billing.client",
+    "pk": 1,
+    "fields": {
+      "key": "alfa",
+      "name": "Alfa Sp. z o.o.",
+      "sheet_tab": "Alfa_{rok}",
+      "nip": "1111111111",
+      "address": "ul. Testowa 1\n00-001 Warszawa",
+      "subscription_net": "2000.00",
+      "included_hours": "5.0",
+      "overtime_rate_net": "400.00",
+      "overtime_period_months": 1,
+      "active": true
+    }
+  },
+  {
+    "model": "billing.client",
+    "pk": 2,
+    "fields": {
+      "key": "beta",
+      "name": "Beta Jan Nowak",
+      "sheet_tab": "Beta_{rok}",
+      "nip": "2222222222",
+      "address": "ul. Próbna 2\n00-002 Kraków",
+      "subscription_net": "0.00",
+      "included_hours": "0.0",
+      "overtime_rate_net": "300.00",
+      "overtime_period_months": 1,
+      "active": true
+    }
+  },
+  {
+    "model": "billing.client",
+    "pk": 3,
+    "fields": {
+      "key": "gamma",
+      "name": "Gamma Sp. k.",
+      "sheet_tab": "Gamma {rok}",
+      "nip": "3333333333",
+      "address": "ul. Przykładowa 3\n00-003 Gdańsk",
+      "subscription_net": "4500.00",
+      "included_hours": "18.0",
+      "overtime_rate_net": "300.00",
+      "overtime_period_months": 6,
+      "active": true
+    }
+  },
+  {
+    "model": "billing.client",
+    "pk": 4,
+    "fields": {
+      "key": "delta",
+      "name": "Delta",
+      "sheet_tab": "Delta_{rok}",
+      "nip": "",
+      "address": "",
+      "subscription_net": "750.00",
+      "included_hours": "0.0",
+      "overtime_rate_net": "0.00",
+      "overtime_period_months": 1,
+      "active": true
+    }
+  },
+  {
+    "model": "billing.client",
+    "pk": 5,
+    "fields": {
+      "key": "epsilon",
+      "name": "Epsilon",
+      "sheet_tab": "Epsilon_{rok}",
+      "nip": "5555555555",
+      "address": "ul. Nieaktywna 5\n00-005 Łódź",
+      "subscription_net": "1000.00",
+      "included_hours": "4.0",
+      "overtime_rate_net": "300.00",
+      "overtime_period_months": 1,
+      "active": false
+    }
+  }
+]
