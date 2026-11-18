@@ -111,7 +111,7 @@ class ViewTests(FakeSheetMixin, TestCase):
         self.assertEqual(delta.hours_total, Decimal('1'))
         self.assertEqual(delta.overtime_hours, Decimal('0'))
         self.assertEqual(delta.net, Decimal('750.00'))
-        self.assertIn('Brak danych do faktury (NIP lub adres)', delta.warnings)
+        self.assertEqual(delta.warnings, ['Brak NIP w konfiguracji klienta'])   # no NIP; no address is no warning
 
     def test_six_month_period_settles_in_july(self):
         response, results = self.results('2026-07')

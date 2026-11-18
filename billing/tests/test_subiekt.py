@@ -19,7 +19,8 @@ REDIRECT = 'http://abofaktury.test:8090/subiekt/callback'
 
 
 def response(status, body):
-    return SimpleNamespace(status_code=status, json=lambda: body, text=str(body))
+    content = b'' if body is None else str(body).encode()
+    return SimpleNamespace(status_code=status, json=lambda: body, text=str(body), content=content)
 
 
 class CredentialsMixin:
@@ -121,7 +122,7 @@ class ConnectionFlowTests(CredentialsMixin, TestCase):
     def test_paging_stops_at_the_total(self):
         save_connection(expires_in=3600)
         full = {'items': [{'id': i, 'tin': ''} for i in range(50)], 'totalItemsCount': 50}
-        with mock.patch.object(subiekt.requests, 'get', return_value=response(200, full)) as get:
+        with mock.patch.object(subiekt.requests, 'request', return_value=response(200, full)) as get:
             self.assertEqual(len(subiekt.list_clients()), 50)
         self.assertEqual(get.call_count, 1)
 
@@ -139,7 +140,7 @@ class ConnectionFlowTests(CredentialsMixin, TestCase):
         page2 = [{'id': 100, 'name': 'GAMMA SP. K.', 'tin': '333-333-33-33'}]
         pages = [response(200, {'items': page1, 'totalItemsCount': 51}),
                  response(200, {'items': page2, 'totalItemsCount': 51})]
-        with mock.patch.object(subiekt.requests, 'get', side_effect=pages) as get:
+        with mock.patch.object(subiekt.requests, 'request', side_effect=pages) as get:
             page = self.client.get(reverse('subiekt'), {'sprawdz': '1'})
         self.assertEqual(get.call_count, 2)
         headers = get.call_args.kwargs['headers']

@@ -38,6 +38,8 @@ Keep the key and credentials files outside the repository. Configure the clients
 | `GOOGLE_SA_KEY_FILE` / `GOOGLE_SA_KEY_JSON` | The key of a read-only service account (file path or JSON). |
 | `SUBIEKT_CREDENTIALS_FILE` | A file with `ClientId=`, `ClientSecret=` and `SubscriptionKey=`. |
 | `SUBIEKT_REDIRECT_URI` | The redirect URI of the app registration in the InsERT developer portal. |
+| `SUBIEKT_ISSUER` | The issuer name on the invoices. |
+| `SUBIEKT_PLACE` | The place of issue on the invoices (optional). |
 
 ## Test
 

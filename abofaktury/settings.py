@@ -136,6 +136,8 @@ GOOGLE_SA_KEY_JSON = os.environ.get('GOOGLE_SA_KEY_JSON', '')   # or the JSON ke
 SUBIEKT_CREDENTIALS_FILE = os.environ.get('SUBIEKT_CREDENTIALS_FILE', '')
 SUBIEKT_REDIRECT_URI = os.environ.get('SUBIEKT_REDIRECT_URI', '')
 SUBIEKT_API_BASE = os.environ.get('SUBIEKT_API_BASE', 'https://api.subiekt123.pl/1.1')
+SUBIEKT_ISSUER = os.environ.get('SUBIEKT_ISSUER', '')   # the issuer name on the invoices (a person)
+SUBIEKT_PLACE = os.environ.get('SUBIEKT_PLACE', '')     # the place of issue, for example a city
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

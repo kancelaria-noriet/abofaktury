@@ -178,9 +178,13 @@ class CalculateTests(TestCase):
         self.assertEqual(result.warnings, ['Brak wpisów za wrzesień 2026'])
         self.assertEqual(result.net, Decimal('2000.00'))
 
-    def test_missing_invoice_data_gives_warning(self):
+    def test_missing_nip_gives_warning(self):
+        result = calculate(make_client(nip=''), OCT, [{'description': 'a', 'hours': 1}])
+        self.assertEqual(result.warnings, ['Brak NIP w konfiguracji klienta'])
+
+    def test_missing_address_gives_no_warning(self):
         result = calculate(make_client(address=''), OCT, [{'description': 'a', 'hours': 1}])
-        self.assertIn('Brak danych do faktury (NIP lub adres)', result.warnings)
+        self.assertEqual(result.warnings, [])
 
     def test_rounding_half_up(self):
         client = make_client(subscription_net=Decimal('0.50'), included_hours=Decimal('0'),

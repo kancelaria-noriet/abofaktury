@@ -179,7 +179,25 @@ def disconnect():
 
 # --- API (read-only) ----------------------------------------------------------------------------
 
-def api_get(path, params=None):
+class NotFound(SubiektError):
+    """The API answered 404."""
+
+
+def _error_text(response):
+    """A short text from an API error: the validation messages if there are any."""
+    try:
+        body = response.json()
+    except ValueError:
+        return response.text[:300]
+    if isinstance(body, list):   # [{"code", "message", "path"}, ...]
+        return '; '.join(f"{item.get('path') or ''}: {item.get('message') or item.get('code')}" for item in body)[:600]
+    if isinstance(body, dict) and body.get('errors'):
+        return '; '.join(f'{key}: {" ".join(map(str, value))}' for key, value in body['errors'].items())[:600]
+    return str(body)[:300]
+
+
+def _api(method, path, params=None, body=None):
+    """Call the Subiekt 123 API. Return the JSON answer, or None for an empty answer (204)."""
     headers = {
         'Authorization': f'Bearer {access_token()}',
         'Ocp-Apim-Subscription-Key': credentials()['SubscriptionKey'],
@@ -188,17 +206,25 @@ def api_get(path, params=None):
     }
     url = settings.SUBIEKT_API_BASE.rstrip('/') + path
     try:
-        response = requests.get(url, params=params, headers=headers, timeout=TIMEOUT)
+        response = requests.request(method, url, params=params, json=body, headers=headers, timeout=TIMEOUT)
     except requests.RequestException as e:
         raise SubiektError(f'brak połączenia z Subiekt 123: {e}') from e
     if response.status_code == 401:
         raise NotConnected('Subiekt odrzucił token (401), połącz ponownie')
-    if response.status_code != 200:
-        raise SubiektError(f'Subiekt 123 zwrócił błąd {response.status_code}: {response.text[:300]}')
+    if response.status_code == 404:
+        raise NotFound(f'Subiekt 123: nie znaleziono ({path})')
+    if response.status_code not in (200, 201, 204):
+        raise SubiektError(f'Subiekt 123 zwrócił błąd {response.status_code}: {_error_text(response)}')
+    if response.status_code == 204 or not response.content:
+        return None
     try:
         return response.json()
     except ValueError as e:
         raise SubiektError(f'Subiekt 123 zwrócił odpowiedź, która nie jest JSON: {response.text[:200]}') from e
+
+
+def api_get(path, params=None):
+    return _api('GET', path, params=params)
 
 
 def _page(data):
@@ -238,3 +264,172 @@ def match_clients(app_clients, subiekt_clients):
         nip = nip_digits(client.nip)
         rows.append((client, nip, by_nip.get(nip, []) if nip else []))
     return rows
+
+
+# --- Invoices (step 2) ---------------------------------------------------------------------------
+
+# Each invoice line uses a catalogue product, found by symbol and type Service (PLAN.md 4.3).
+PRODUCT_SYMBOLS = {
+    'usługa prawna - abonament': '69.10.1 abonament',
+    'usługa prawna - nadgodziny': '69.10.1 nadgodziny',
+    'usługa prawna': '69.10.1',
+    'usługa prawna - koszty zastępstwa': '69.10.1 kzp',
+    'usługa prawna - opłata': '69.10.1 opłata',
+}
+VAT_RATE_TEXT = '23%'
+DUE_DAYS = 7
+
+
+def list_products(page_size=MAX_PAGE_SIZE, max_pages=100):
+    products = []
+    for page in range(max_pages):
+        items, total = _page(api_get('/products', {'pageNumber': page, 'pageSize': page_size}))
+        products.extend(items)
+        if len(items) < page_size or (total is not None and len(products) >= total):
+            break
+    return products
+
+
+def find_products(products, symbols):
+    """Return {symbol: product} for the symbols. Each symbol must have exactly one Service product."""
+    found, problems = {}, []
+    for symbol in symbols:
+        hits = [p for p in products
+                if (p.get('symbol') or '').strip() == symbol and p.get('kind') == 'Service']
+        if len(hits) == 1:
+            found[symbol] = hits[0]
+        elif not hits:
+            problems.append(f'brak produktu (usługi) o symbolu „{symbol}”')
+        else:
+            problems.append(f'kilka produktów (usług) o symbolu „{symbol}”')
+    if problems:
+        raise SubiektError('; '.join(problems))
+    return found
+
+
+def find_client(subiekt_clients, nip):
+    """The one Subiekt client with this NIP (digits compared). A missing or double match is an error."""
+    digits = nip_digits(nip)
+    if not digits:
+        raise SubiektError('klient nie ma NIP w konfiguracji aplikacji')
+    hits = [item for item in subiekt_clients if nip_digits(item.get('tin')) == digits]
+    if not hits:
+        raise SubiektError(f'brak kontrahenta w Subiekcie z NIP {digits}; dodaj go w Subiekcie')
+    if len(hits) > 1:
+        raise SubiektError(f'kilku kontrahentów w Subiekcie z NIP {digits}')
+    return hits[0]
+
+
+def _date(value):
+    return f'{value.isoformat()}T00:00:00'
+
+
+def build_invoice(result, subiekt_client, products, issuer, issue_date, place=''):
+    """The body of POST /documents for one calculated invoice (calc.Result). Pure, no API calls.
+
+    The settings copy the practice of the accounting firm: a KSeF invoice, bank transfer, net
+    calculation, a domestic sale (SK), sale date = tax date = issue date, payment due in 7 days.
+    The API requires the "payments" field (a missing field is an error, an empty list is accepted). A KZP
+    "tylko VAT" adds a payment of its net amount, so only the VAT is left to pay.
+    """
+    if not result.lines:
+        raise SubiektError('faktura nie ma pozycji')
+    if not issuer:
+        raise SubiektError('brak wystawcy faktury (SUBIEKT_ISSUER)')
+    items = []
+    for number, line in enumerate(result.lines, 1):
+        symbol = PRODUCT_SYMBOLS.get(line.name)
+        if symbol is None:
+            raise SubiektError(f'brak produktu dla pozycji „{line.name}”')
+        items.append({
+            'no': number,
+            'productName': line.name,
+            'sourceProductId': products[symbol]['id'],
+            'quantity': float(line.quantity),
+            'unit': line.unit,
+            'netPrice': float(line.unit_net),
+            'vatRate': VAT_RATE_TEXT,
+        })
+    client = {key: subiekt_client.get(key) for key in ('name', 'tin', 'kind', 'tinKind', 'address')}
+    client['sourceClientId'] = subiekt_client['id']
+    body = {
+        'kind': 'Invoice',
+        'eInvoice': True,
+        'currency': 'PLN',
+        'issuer': issuer,
+        'calculationMethod': 'Net',
+        'paymentMethod': 'BankTransfer',
+        'splitPayment': 'False',
+        'communityTransaction': 'SK',
+        'issueDate': _date(issue_date),
+        'deliveryDate': _date(issue_date),
+        'taxLiabilityDate': _date(issue_date),
+        'dueDate': _date(issue_date + timedelta(days=DUE_DAYS)),
+        'client': client,
+        'items': items,
+    }
+    if place:
+        body['transactionLocation'] = place
+    body['payments'] = []
+    if result.paid:
+        body['payments'].append({'date': _date(issue_date), 'onDocument': True, 'value': float(result.paid)})
+    return body
+
+
+def create_document(body):
+    """POST /documents. Return the ID of the new document."""
+    data = _api('POST', '/documents', body=body)
+    document_id = (data or {}).get('id')
+    if isinstance(document_id, dict):
+        document_id = document_id.get('value')
+    if not document_id:
+        raise SubiektError(f'Subiekt 123 nie zwrócił identyfikatora dokumentu: {str(data)[:200]}')
+    return str(document_id)
+
+
+def get_document(document_id):
+    """GET /documents/{id}, or None if the document does not exist (any more)."""
+    try:
+        return api_get(f'/documents/{document_id}')
+    except NotFound:
+        return None
+
+
+def delete_document(document_id):
+    _api('DELETE', f'/documents/{document_id}')
+
+
+SUBSCRIPTION_LINE = 'usługa prawna - abonament'
+
+
+def documents_issued_between(first_day, next_first_day, max_pages=100):
+    """The documents with an issue date in [first_day, next_first_day), newest first."""
+    first, end = first_day.isoformat(), next_first_day.isoformat()
+    found = []
+    for page in range(max_pages):
+        items, _ = _page(api_get('/documents', {'pageNumber': page, 'pageSize': MAX_PAGE_SIZE,
+                                                'orderBy': 'issueDate:desc'}))
+        found += [item for item in items if first <= str(item.get('issueDate'))[:10] < end]
+        if len(items) < MAX_PAGE_SIZE or (items and str(items[-1].get('issueDate'))[:10] < first):
+            break
+    return found
+
+
+def client_invoices(nip, first_day, next_first_day):
+    """The invoices of the client (by NIP) issued in the period, with the names of their lines."""
+    digits = nip_digits(nip)
+    invoices = []
+    for item in documents_issued_between(first_day, next_first_day):
+        if item.get('kind') != 'Invoice' or nip_digits(item.get('clientTin')) != digits:
+            continue
+        document = get_document(item['id']) or {}
+        lines = [line.get('productName') for line in document.get('items') or []]
+        invoices.append({
+            'number': item.get('documentNumber'),
+            'date': str(item.get('issueDate'))[:10],
+            'net': item.get('totalNet'),
+            'ksef': bool(item.get('ksefNumber')),
+            'lines': lines,
+            'has_subscription': SUBSCRIPTION_LINE in lines,
+        })
+    return invoices

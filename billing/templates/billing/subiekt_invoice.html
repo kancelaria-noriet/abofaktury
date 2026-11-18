@@ -1,0 +1,121 @@
+{% extends 'billing/base.html' %}
+
+{% block title %}Faktura w Subiekcie - {{ client.name }}{% endblock %}
+
+{% block content %}
+<h1>Faktura w Subiekcie</h1>
+<p class="muted">{{ client.name }}, faktura za {{ month.label }}.
+  <a href="{% url 'month' month.key %}#klient-{{ client.key }}">Wróć do rozliczeń</a></p>
+
+{% if existing %}
+<section class="panel">
+  <p>Faktura dla tego klienta i miesiąca już istnieje: <strong>{{ existing.document_number|default:"bez numeru" }}</strong>
+    (utworzona {{ existing.created_at|date:"j.m.Y H:i" }}).</p>
+</section>
+{% elif not connection %}
+<section class="panel warn">
+  <p>Subiekt nie jest połączony. <a href="{% url 'subiekt' %}">Połącz z Subiektem</a>.</p>
+</section>
+{% else %}
+
+{% if problem %}
+<section class="panel warn">
+  <h3>Nie można utworzyć faktury</h3>
+  <p>{{ problem }}</p>
+</section>
+{% endif %}
+
+{% if result.warnings %}
+<section class="panel warn">
+  <h3>Ostrzeżenia</h3>
+  <ul>{% for warning in result.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+{% if body %}
+<div class="columns">
+  <div class="panel">
+    <h3>Nabywca (z Subiekta)</h3>
+    <p>
+      <strong>{{ body.client.name }}</strong><br>
+      {% if body.client.address %}{{ body.client.address.line1|default:"" }}<br>
+      {{ body.client.address.zipCode|default:"" }} {{ body.client.address.city|default:"" }}<br>{% endif %}
+      NIP: {{ body.client.tin|default:"brak" }}
+    </p>
+  </div>
+  <div class="panel">
+    <h3>Dokument</h3>
+    <p>
+      Faktura KSeF, przelew<br>
+      Data wystawienia i sprzedaży: {{ body.issueDate|slice:":10" }}<br>
+      Termin płatności: {{ body.dueDate|slice:":10" }}<br>
+      Wystawił: {{ body.issuer }}
+    </p>
+  </div>
+</div>
+{% endif %}
+
+{% if result %}
+<h3>Pozycje</h3>
+<table class="data">
+  <thead>
+    <tr><th>Lp.</th><th>Nazwa</th><th class="num">Ilość</th><th>J.m.</th><th class="num">Cena netto</th>
+      <th class="num">Netto</th><th class="num">VAT 23%</th><th class="num">Brutto</th></tr>
+  </thead>
+  <tbody>
+    {% for line in result.lines %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ line.name }}{% if line.note %} <span class="badge">{{ line.note }}</span>{% endif %}</td>
+      <td class="num">{{ line.quantity|floatformat:"-1" }}</td>
+      <td>{{ line.unit }}</td>
+      <td class="num">{{ line.unit_net|floatformat:"2g" }}</td>
+      <td class="num">{{ line.net|floatformat:"2g" }}</td>
+      <td class="num">{{ line.vat|floatformat:"2g" }}</td>
+      <td class="num">{{ line.gross|floatformat:"2g" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8" class="muted">Brak pozycji.</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><th colspan="5">Razem</th><th class="num">{{ result.net|floatformat:"2g" }}</th>
+      <th class="num">{{ result.vat|floatformat:"2g" }}</th><th class="num">{{ result.gross|floatformat:"2g" }}</th></tr>
+    {% if result.paid %}
+    <tr><th colspan="7">Zapłacono (KZP - tylko VAT, płatność na fakturze)</th><th class="num">{{ result.paid|floatformat:"2g" }}</th></tr>
+    <tr><th colspan="7">Do zapłaty</th><th class="num">{{ result.to_pay|floatformat:"2g" }}</th></tr>
+    {% endif %}
+  </tfoot>
+</table>
+{% endif %}
+
+{% if body %}
+<h3>Inne faktury klienta w Subiekcie ({{ month.label }})</h3>
+{% if other_invoices %}
+<section class="panel{% if needs_confirmation %} warn{% endif %}">
+  {% if needs_confirmation %}<p><strong>Klient ma już w tym miesiącu fakturę z abonamentem.</strong></p>{% endif %}
+  <ul>
+    {% for invoice in other_invoices %}
+    <li>{{ invoice.number }} z {{ invoice.date }}, netto {{ invoice.net }}{% if invoice.ksef %}, w KSeF{% endif %}:
+      {{ invoice.lines|join:", " }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% else %}
+<p class="muted small">Brak innych faktur tego klienta w tym miesiącu.</p>
+{% endif %}
+
+<form method="post" action="{% url 'subiekt_invoice_create' month.key client.key %}" class="toolbar">
+  {% csrf_token %}
+  <input type="hidden" name="signature" value="{{ signature }}">
+  {% if needs_confirmation %}
+  <label><input type="checkbox" name="confirm_subscription" value="1" required>
+    Wiem, że klient ma już fakturę z abonamentem w tym miesiącu, i chcę wystawić kolejną.</label>
+  {% endif %}
+  <button type="submit" class="button primary">Utwórz fakturę w Subiekcie</button>
+  <span class="muted small">Aplikacja nie wysyła faktury do KSeF. Sprawdź ją w Subiekcie i wyślij do KSeF tam.</span>
+</form>
+{% endif %}
+
+{% endif %}
+{% endblock %}

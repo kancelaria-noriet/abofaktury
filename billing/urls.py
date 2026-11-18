@@ -25,4 +25,7 @@ urlpatterns = [
     path('miesiac/', views.go_to_month, name='go_to_month'),
     path('<month:month>/', views.month_view, name='month'),
     path('<month:month>/<slug:key>/raport.pdf', views.report_pdf, name='report_pdf'),
+    path('<month:month>/<slug:key>/subiekt/', views.subiekt_invoice, name='subiekt_invoice'),
+    path('<month:month>/<slug:key>/subiekt/utworz', views.subiekt_invoice_create, name='subiekt_invoice_create'),
+    path('<month:month>/<slug:key>/subiekt/usun', views.subiekt_invoice_delete, name='subiekt_invoice_delete'),
 ]

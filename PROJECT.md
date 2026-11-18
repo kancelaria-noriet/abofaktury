@@ -22,7 +22,9 @@ To do - fill in after the demo feedback. Short version for now:
   (WeasyPrint).
 - `billing/models.py`: the client config (Django admin).
 - `billing/subiekt.py`: the Subiekt 123 API. OAuth 2.0 with PKCE at kontoapi.insert.com.pl, the tokens in
-  `SubiektConnection` (one row, not in the admin), refresh, and read-only calls. Step 2 (invoices) is not built.
+  `SubiektConnection` (one row, not in the admin), refresh, the client and product lookup, and the invoice:
+  `build_invoice()` (pure), create, read and delete. `SubiektInvoice` stores one invoice for each client and
+  month. The app never sends to KSeF; the operator does that in Subiekt.
 - Every page needs a login (`LoginRequiredMiddleware`). The admin login form is the login page.
 
 ## Decisions

@@ -260,7 +260,7 @@ def calculate(client, invoice_month, raw_entries, all_months=None):
     """Calculate the invoice of `client` for `invoice_month`.
 
     `client` needs: subscription_net, included_hours, overtime_rate_net, overtime_period_months,
-    nip, address.
+    nip.
     `raw_entries` are the source entries of the work month (invoice_month - 1).
     `all_months` maps "YYYY-MM" to the source entries of the client. The calculation uses it only
     for the earlier months of a settlement period longer than 1 month.
@@ -272,8 +272,9 @@ def calculate(client, invoice_month, raw_entries, all_months=None):
     entries = [parse_entry(raw) for raw in raw_entries]
     warnings = []
 
-    if not client.nip or not client.address.strip():
-        warnings.append('Brak danych do faktury (NIP lub adres)')
+    # The invoice takes the buyer's name and address from Subiekt; the app needs only the NIP to find it.
+    if not client.nip:
+        warnings.append('Brak NIP w konfiguracji klienta')
     if not entries:
         warnings.append(f'Brak wpisów za {work_month.label}')
     warnings.extend(entry.warning for entry in entries if entry.warning)

@@ -80,3 +80,25 @@ class SubiektConnection(models.Model):
 
     class Meta:
         verbose_name = 'połączenie z Subiektem'
+
+
+class SubiektInvoice(models.Model):
+    """An invoice that the app created in Subiekt 123: one for each client and invoice month."""
+
+    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='subiekt_invoices')
+    invoice_month = models.CharField('miesiąc faktury', max_length=7)   # YYYY-MM
+    document_id = models.CharField('ID dokumentu w Subiekcie', max_length=64)
+    document_number = models.CharField('numer', max_length=50, blank=True)
+    net = models.DecimalField('netto (aplikacja)', max_digits=12, decimal_places=2)
+    gross = models.DecimalField('brutto (aplikacja)', max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField('utworzono')
+
+    class Meta:
+        verbose_name = 'faktura w Subiekcie'
+        verbose_name_plural = 'faktury w Subiekcie'
+        constraints = [
+            models.UniqueConstraint(fields=['client', 'invoice_month'], name='one_invoice_per_client_month'),
+        ]
+
+    def __str__(self):
+        return f'{self.document_number or self.document_id} ({self.client}, {self.invoice_month})'

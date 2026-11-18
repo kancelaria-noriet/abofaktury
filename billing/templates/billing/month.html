@@ -122,7 +122,7 @@
       <h3>Nabywca</h3>
       <p>
         <strong>{{ client.name }}</strong><br>
-        {% if client.address %}{{ client.address|linebreaksbr }}<br>{% else %}<span class="missing">brak adresu</span><br>{% endif %}
+        {% if client.address %}{{ client.address|linebreaksbr }}<br>{% endif %}
         NIP: {% if client.nip %}{{ client.nip }}{% else %}<span class="missing">brak</span>{% endif %}
       </p>
     </div>
@@ -236,6 +236,24 @@
       {% endif %}
     </tfoot>
   </table>
+
+  <div class="toolbar">
+    {% if result.subiekt_invoice %}
+    {% with invoice=result.subiekt_invoice %}
+    <span>Faktura w Subiekcie: <strong>{{ invoice.document_number|default:"bez numeru" }}</strong>
+      (utworzona {{ invoice.created_at|date:"j.m.Y H:i" }})</span>
+    <form method="post" action="{% url 'subiekt_invoice_delete' month.key client.key %}" class="inline"
+          onsubmit="return confirm('Usunąć fakturę {{ invoice.document_number|default:"bez numeru"|escapejs }} z Subiektu? Działa tylko przed wysłaniem do KSeF.');">
+      {% csrf_token %}
+      <button type="submit">Usuń w Subiekcie</button>
+    </form>
+    {% endwith %}
+    {% elif subiekt %}
+    <a class="button primary" href="{% url 'subiekt_invoice' month.key client.key %}">Utwórz fakturę w Subiekcie</a>
+    {% else %}
+    <span class="muted small"><a href="{% url 'subiekt' %}">Połącz z Subiektem</a>, aby tworzyć faktury.</span>
+    {% endif %}
+  </div>
 
   <h3>Wpisy - {{ result.work_month.label }}</h3>
   <table class="data">
