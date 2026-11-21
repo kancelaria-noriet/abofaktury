@@ -21,11 +21,13 @@ COPY . .
 RUN DJANGO_DEBUG=0 DJANGO_SECRET_KEY=collectstatic-only python manage.py collectstatic --noinput
 
 # Run as a non-root user. /data holds the SQLite database (mount a persistent volume there).
-RUN useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin app \
+RUN useradd --uid 10001 --no-create-home --home-dir /app --shell /usr/sbin/nologin app \
     && mkdir -p /data \
     && chown app /data \
     && chmod +x start.sh
 USER app
+# /app is read-only for the app user: gunicorn's control socket and the fontconfig cache go to /tmp.
+ENV HOME=/tmp
 
 ENV DJANGO_DB_PATH=/data/db.sqlite3
 VOLUME ["/data"]
