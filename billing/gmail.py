@@ -1,14 +1,13 @@
 """Gmail API: a one-time OAuth connection and sending of messages (scope gmail.send only).
 
-The OAuth client is of type "Desktop app" (settings.GMAIL_CLIENT_FILE). Google accepts a `localhost`
-redirect for it. The redirect page does not load; the operator copies the address from the browser
-bar into the app, and the app takes the code from it (PLAN.md 4.4).
+The OAuth client is of type "Web application". Google sends the browser back to
+settings.GMAIL_REDIRECT_URI (https on a public domain; the same URI as in the client's settings).
 """
 
 import base64
 import json
 from datetime import timedelta
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import urlencode
 
 import requests
 from django.conf import settings
@@ -19,7 +18,6 @@ from .models import GmailConnection
 AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 TOKEN_URL = 'https://oauth2.googleapis.com/token'
 SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send'
-REDIRECT_URI = 'http://localhost'
 SCOPES = 'openid email https://www.googleapis.com/auth/gmail.send'
 TIMEOUT = 30
 REFRESH_MARGIN = timedelta(seconds=60)
@@ -36,7 +34,7 @@ class NotConnected(GmailError):
 
 
 def client_config():
-    """client_id and client_secret of the OAuth client (type "Desktop app"): GMAIL_CLIENT_JSON or the file."""
+    """client_id and client_secret of the OAuth client (type "Web application"): GMAIL_CLIENT_JSON or the file."""
     try:
         if settings.GMAIL_CLIENT_JSON:
             data = json.loads(settings.GMAIL_CLIENT_JSON)
@@ -57,10 +55,16 @@ def connection():
     return GmailConnection.objects.filter(pk=1).first()
 
 
+def redirect_uri():
+    if not settings.GMAIL_REDIRECT_URI:
+        raise GmailError('brak adresu powrotu (GMAIL_REDIRECT_URI)')
+    return settings.GMAIL_REDIRECT_URI
+
+
 def authorize_url(state, challenge):
     params = {
         'client_id': client_config()['client_id'],
-        'redirect_uri': REDIRECT_URI,
+        'redirect_uri': redirect_uri(),
         'response_type': 'code',
         'scope': SCOPES,
         'state': state,
@@ -72,24 +76,6 @@ def authorize_url(state, challenge):
     if settings.EMAIL_ACCOUNT:
         params['login_hint'] = settings.EMAIL_ACCOUNT
     return f'{AUTHORIZE_URL}?{urlencode(params)}'
-
-
-def code_from_paste(text, expected_state):
-    """The authorization code from the pasted address (http://localhost/?state=...&code=...) or a bare code."""
-    text = (text or '').strip()
-    if not text:
-        raise GmailError('wklej adres z paska przeglądarki')
-    if '?' not in text and '=' not in text:
-        return text
-    query = parse_qs(urlsplit(text).query) if '?' in text else parse_qs(text)
-    if query.get('error'):
-        raise GmailError(f'Google nie udzielił dostępu: {query["error"][0]}')
-    if query.get('state', [''])[0] != expected_state:
-        raise GmailError('nieprawidłowy parametr state; zacznij łączenie od nowa')
-    code = query.get('code', [''])[0]
-    if not code:
-        raise GmailError('w adresie nie ma kodu autoryzacji')
-    return code
 
 
 def _token_request(data):
@@ -136,7 +122,7 @@ def _save(data, new=False):
 
 
 def exchange_code(code, verifier):
-    data = _token_request({'grant_type': 'authorization_code', 'code': code, 'redirect_uri': REDIRECT_URI,
+    data = _token_request({'grant_type': 'authorization_code', 'code': code, 'redirect_uri': redirect_uri(),
                            'code_verifier': verifier})
     if not data.get('refresh_token'):
         raise GmailError('Google nie przekazał tokenu odświeżania; połącz ponownie')

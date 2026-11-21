@@ -427,34 +427,44 @@ def subiekt_invoice_delete(request, month, key):
 # --- Gmail: connection (step 3) -------------------------------------------------------------------
 
 def gmail_page(request):
-    """The connection status, and the start of a new connection (the manual code step)."""
-    context = {'connection': gmail.connection(), 'authorize_url': None, 'error': None,
-               'from_address': settings.EMAIL_FROM, 'test_recipient': settings.EMAIL_TEST_RECIPIENT}
-    if request.GET.get('polacz'):
-        try:
-            verifier, challenge = subiekt.new_pkce()
-            state = secrets.token_urlsafe(32)
-            context['authorize_url'] = gmail.authorize_url(state, challenge)
-            request.session['gmail_oauth'] = {'state': state, 'verifier': verifier}
-        except gmail.GmailError as e:
-            context['error'] = str(e)
+    """The connection status."""
+    context = {'connection': gmail.connection(), 'from_address': settings.EMAIL_FROM,
+               'test_recipient': settings.EMAIL_TEST_RECIPIENT}
     return render(request, 'billing/gmail.html', context)
 
 
-@require_POST
 def gmail_connect(request):
-    pending = request.session.get('gmail_oauth')
-    if not pending:
-        messages.error(request, 'Zacznij łączenie od nowa („Połącz z Gmail”).')
-        return redirect('gmail')
+    """Start the OAuth login at Google (authorization code with PKCE)."""
     try:
-        code = gmail.code_from_paste(request.POST.get('address'), pending['state'])
-        conn = gmail.exchange_code(code, pending['verifier'])
+        target = urlsplit(gmail.redirect_uri())
+        if request.get_host() != target.netloc:
+            # The session cookie must come back with the callback, so start on the same host.
+            return redirect(f'{target.scheme}://{target.netloc}{request.path}')
+        verifier, challenge = subiekt.new_pkce()
+        state = secrets.token_urlsafe(32)
+        url = gmail.authorize_url(state, challenge)
     except gmail.GmailError as e:
-        messages.error(request, f'Nie połączono z Gmail: {e}')
-        return redirect(f"{reverse('gmail')}?polacz=1")
-    request.session.pop('gmail_oauth', None)
-    messages.success(request, f'Połączono z Gmail{f" jako {conn.account}" if conn.account else ""}.')
+        messages.error(request, f'Nie można połączyć z Gmail: {e}')
+        return redirect('gmail')
+    request.session['gmail_oauth'] = {'state': state, 'verifier': verifier}
+    return redirect(url)
+
+
+def gmail_callback(request):
+    """Google sends the browser back here after the login and the consent."""
+    pending = request.session.pop('gmail_oauth', None)
+    if request.GET.get('error'):
+        messages.error(request, f'Google nie udzielił dostępu: {request.GET["error"]}')
+    elif not pending or not secrets.compare_digest(pending['state'], request.GET.get('state', '')):
+        messages.error(request, 'Nieprawidłowy lub wygasły parametr state. Połącz ponownie.')
+    elif not request.GET.get('code'):
+        messages.error(request, 'Google nie przekazał kodu autoryzacji. Połącz ponownie.')
+    else:
+        try:
+            conn = gmail.exchange_code(request.GET['code'], pending['verifier'])
+            messages.success(request, f'Połączono z Gmail{f" jako {conn.account}" if conn.account else ""}.')
+        except gmail.GmailError as e:
+            messages.error(request, f'Nie można dokończyć połączenia z Gmail: {e}')
     return redirect('gmail')
 
 

@@ -51,7 +51,8 @@ docker run -p 8000:8000 -v abofaktury-data:/data --env-file <env file> abofaktur
 | `SUBIEKT_REDIRECT_URI` | `https://<host>/subiekt/callback`; the same URI as in the app registration. |
 | `SUBIEKT_ISSUER` | The issuer name on the invoices. |
 | `SUBIEKT_PLACE` | The place of issue on the invoices (optional). |
-| `GMAIL_CLIENT_JSON` / `GMAIL_CLIENT_FILE` | A Google OAuth client of type "Desktop app" (Gmail API), JSON or a file. |
+| `GMAIL_CLIENT_JSON` / `GMAIL_CLIENT_FILE` | A Google OAuth client of type "Web application" (Gmail API), JSON or a file. |
+| `GMAIL_REDIRECT_URI` | `https://<host>/gmail/callback`; the same URI as in the OAuth client. |
 | `EMAIL_ACCOUNT` | The Google account that sends (a login hint). |
 | `EMAIL_FROM` | The From address (a "send as" alias of that account). |
 | `EMAIL_TEST_RECIPIENT` | Test mode: all emails go only to this address. |

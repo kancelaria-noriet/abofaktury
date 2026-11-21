@@ -183,13 +183,15 @@ SUBIEKT_API_BASE = os.environ.get('SUBIEKT_API_BASE', 'https://api.subiekt123.pl
 SUBIEKT_ISSUER = os.environ.get('SUBIEKT_ISSUER', '')   # the issuer name on the invoices (a person)
 SUBIEKT_PLACE = os.environ.get('SUBIEKT_PLACE', '')     # the place of issue, for example a city
 
-# Email through the Gmail API (step 3). The OAuth client of type "Desktop app" comes as JSON in
-# GMAIL_CLIENT_JSON (production) or in the file GMAIL_CLIENT_FILE (local dev). EMAIL_FROM is the From
+# Email through the Gmail API (step 3). The OAuth client of type "Web application" comes as JSON in
+# GMAIL_CLIENT_JSON (production) or in the file GMAIL_CLIENT_FILE (local dev). GMAIL_REDIRECT_URI is
+# https://<host>/gmail/callback, the same URI as in the client's settings. EMAIL_FROM is the From
 # address (a "send as" alias of the connected account).
 # Test mode: with EMAIL_TEST_RECIPIENT set, every email goes only to that address, and every email has
 # the invoice EMAIL_TEST_INVOICE_NUMBER (downloaded from Subiekt at send time) instead of the real one.
 GMAIL_CLIENT_JSON = os.environ.get('GMAIL_CLIENT_JSON', '')
 GMAIL_CLIENT_FILE = os.environ.get('GMAIL_CLIENT_FILE', '')
+GMAIL_REDIRECT_URI = os.environ.get('GMAIL_REDIRECT_URI', '')
 EMAIL_ACCOUNT = os.environ.get('EMAIL_ACCOUNT', '')       # the account to connect (a login hint only)
 EMAIL_FROM = os.environ.get('EMAIL_FROM', '')
 EMAIL_TEST_RECIPIENT = os.environ.get('EMAIL_TEST_RECIPIENT', '')

@@ -10,33 +10,13 @@
 <section class="panel warn"><p><strong>Tryb testowy:</strong> wszystkie e-maile idą tylko do {{ test_recipient }}.</p></section>
 {% endif %}
 
-{% if error %}
-<section class="panel warn"><p>{{ error }}</p></section>
-{% endif %}
-
-{% if authorize_url %}
-<section class="panel">
-  <h3>Połącz z Gmail</h3>
-  <ol>
-    <li><a href="{{ authorize_url }}" target="_blank" rel="noopener">Otwórz logowanie Google</a> i zaloguj się kontem,
-      które wysyła faktury. Zezwól na wysyłanie wiadomości.</li>
-    <li>Google przekieruje na adres <code>http://localhost/?…</code>. Strona się nie otworzy, to normalne.</li>
-    <li>Skopiuj cały adres z paska przeglądarki i wklej go poniżej.</li>
-  </ol>
-  <form method="post" action="{% url 'gmail_connect' %}" class="toolbar">
-    {% csrf_token %}
-    <input type="text" name="address" required size="60" placeholder="http://localhost/?state=…&code=…"
-           aria-label="Adres z paska przeglądarki">
-    <button type="submit" class="button primary">Połącz</button>
-  </form>
-</section>
-{% elif connection %}
+{% if connection %}
 <section class="panel">
   <h3>Połączono</h3>
   <p>{% if connection.account %}Konto Google: <strong>{{ connection.account }}</strong><br>{% endif %}
     Połączono: {{ connection.connected_at|date:"j.m.Y H:i" }}</p>
   <div class="toolbar">
-    <a class="button" href="{% url 'gmail' %}?polacz=1">Połącz ponownie</a>
+    <a class="button" href="{% url 'gmail_connect' %}">Połącz ponownie</a>
     <form method="post" action="{% url 'gmail_disconnect' %}" class="inline">
       {% csrf_token %}
       <button type="submit">Rozłącz</button>
@@ -46,7 +26,8 @@
 {% else %}
 <section class="panel warn">
   <h3>Nie połączono</h3>
-  <a class="button primary" href="{% url 'gmail' %}?polacz=1">Połącz z Gmail</a>
+  <p>Zaloguj się w Google kontem, które wysyła faktury, i zezwól aplikacji na wysyłanie wiadomości. Wystarczy raz.</p>
+  <a class="button primary" href="{% url 'gmail_connect' %}">Połącz z Gmail</a>
 </section>
 {% endif %}
 {% endblock %}

@@ -58,7 +58,9 @@ class GmailFileMixin:
         self.addCleanup(os.remove, self.client_file)
         patcher = override_settings(GMAIL_CLIENT_FILE=self.client_file, GMAIL_CLIENT_JSON='',
                                     EMAIL_FROM='Kancelaria <faktury@example.com>', EMAIL_ACCOUNT='sender@example.com',
-                                    EMAIL_TEST_INVOICE_NUMBER='FS 9/10/2026')
+                                    EMAIL_TEST_INVOICE_NUMBER='FS 9/10/2026',
+                                    GMAIL_REDIRECT_URI='https://abofaktury.test/gmail/callback',
+                                    ALLOWED_HOSTS=['testserver', 'abofaktury.test', 'other.test'])
         patcher.enable()
         self.addCleanup(patcher.disable)
         self.google = FakeGoogle()
@@ -71,24 +73,6 @@ def connect_gmail(expires_in=3600):
     now = timezone.now()
     return GmailConnection.objects.create(pk=1, access_token='g-at', refresh_token='g-rt', account='sender@example.com',
                                           expires_at=now + timedelta(seconds=expires_in), connected_at=now)
-
-
-class PasteTests(TestCase):
-    def test_code_from_the_address(self):
-        self.assertEqual(gmail.code_from_paste('http://localhost/?state=s1&code=4/abc&scope=x', 's1'), '4/abc')
-
-    def test_wrong_state(self):
-        with self.assertRaisesRegex(gmail.GmailError, 'state'):
-            gmail.code_from_paste('http://localhost/?state=other&code=4/abc', 's1')
-
-    def test_error_from_google(self):
-        with self.assertRaisesRegex(gmail.GmailError, 'access_denied'):
-            gmail.code_from_paste('http://localhost/?error=access_denied&state=s1', 's1')
-
-    def test_bare_code_and_empty(self):
-        self.assertEqual(gmail.code_from_paste(' 4/abc ', 's1'), '4/abc')
-        with self.assertRaisesRegex(gmail.GmailError, 'wklej'):
-            gmail.code_from_paste('', 's1')
 
 
 class MessageTests(TestCase):
@@ -112,23 +96,59 @@ class GmailConnectionTests(GmailFileMixin, DjangoTestCase):
         super().setUp()
         self.client.force_login(get_user_model().objects.create_user('operator', password='x'))
 
-    def test_connect_with_the_pasted_address(self):
-        page = self.client.get(reverse('gmail'), {'polacz': '1'})
-        params = parse_qs(urlsplit(page.context['authorize_url']).query)
-        self.assertEqual(params['redirect_uri'], ['http://localhost'])
+    def start(self, host='abofaktury.test'):
+        response = self.client.get(reverse('gmail_connect'), HTTP_HOST=host)
+        self.assertEqual(response.status_code, 302)
+        return response
+
+    def test_connect_and_callback(self):
+        response = self.start()
+        params = parse_qs(urlsplit(response['Location']).query)
+        self.assertTrue(response['Location'].startswith(gmail.AUTHORIZE_URL))
+        self.assertEqual(params['redirect_uri'], ['https://abofaktury.test/gmail/callback'])
         self.assertIn('https://www.googleapis.com/auth/gmail.send', params['scope'][0])
         self.assertEqual((params['code_challenge_method'], params['access_type'], params['login_hint']),
                          (['S256'], ['offline'], ['sender@example.com']))
         state = params['state'][0]
         verifier = self.client.session['gmail_oauth']['verifier']
-        done = self.client.post(reverse('gmail_connect'), {'address': f'http://localhost/?state={state}&code=4/xyz'},
-                                follow=True)
+        done = self.client.get(reverse('gmail_callback'), {'state': state, 'code': '4/xyz'},
+                               HTTP_HOST='abofaktury.test', follow=True)
         self.assertContains(done, 'Połączono z Gmail jako sender@example.com.')
         sent = self.google.token_calls[0]
-        self.assertEqual((sent['code'], sent['code_verifier'], sent['client_secret']), ('4/xyz', verifier, 'g+secret'))
+        self.assertEqual((sent['code'], sent['code_verifier'], sent['client_secret'], sent['redirect_uri']),
+                         ('4/xyz', verifier, 'g+secret', 'https://abofaktury.test/gmail/callback'))
         self.assertEqual(gmail.connection().refresh_token, 'g-rt')
 
-    @override_settings(GMAIL_CLIENT_FILE='', GMAIL_CLIENT_JSON='{"installed": {"client_id": "env-id", "client_secret": "s"}}')
+    def test_callback_with_wrong_state_does_not_connect(self):
+        self.start()
+        done = self.client.get(reverse('gmail_callback'), {'state': 'wrong', 'code': '4/xyz'},
+                               HTTP_HOST='abofaktury.test', follow=True)
+        self.assertContains(done, 'Nieprawidłowy lub wygasły parametr state')
+        self.assertEqual(self.google.token_calls, [])
+        self.assertIsNone(gmail.connection())
+
+    def test_callback_without_a_started_connection(self):
+        done = self.client.get(reverse('gmail_callback'), {'state': 'x', 'code': '4/xyz'},
+                               HTTP_HOST='abofaktury.test', follow=True)
+        self.assertContains(done, 'Nieprawidłowy lub wygasły parametr state')
+        self.assertIsNone(gmail.connection())
+
+    def test_callback_with_error_from_google(self):
+        self.start()
+        done = self.client.get(reverse('gmail_callback'), {'error': 'access_denied'},
+                               HTTP_HOST='abofaktury.test', follow=True)
+        self.assertContains(done, 'Google nie udzielił dostępu: access_denied')
+
+    def test_connect_on_another_host_moves_to_the_redirect_host(self):
+        response = self.start(host='other.test')
+        self.assertEqual(response['Location'], 'https://abofaktury.test/gmail/connect')
+
+    @override_settings(GMAIL_REDIRECT_URI='')
+    def test_missing_redirect_uri(self):
+        done = self.client.get(reverse('gmail_connect'), HTTP_HOST='abofaktury.test', follow=True)
+        self.assertContains(done, 'brak adresu powrotu (GMAIL_REDIRECT_URI)')
+
+    @override_settings(GMAIL_CLIENT_FILE='', GMAIL_CLIENT_JSON='{"web": {"client_id": "env-id", "client_secret": "s"}}')
     def test_client_from_the_env_var(self):
         self.assertEqual(gmail.client_config()['client_id'], 'env-id')
 

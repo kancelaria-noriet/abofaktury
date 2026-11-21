@@ -22,6 +22,7 @@ urlpatterns = [
     path('subiekt/', views.subiekt_page, name='subiekt'),
     path('gmail/', views.gmail_page, name='gmail'),
     path('gmail/connect', views.gmail_connect, name='gmail_connect'),
+    path('gmail/callback', views.gmail_callback, name='gmail_callback'),
     path('gmail/disconnect', views.gmail_disconnect, name='gmail_disconnect'),
     path('subiekt/connect', views.subiekt_connect, name='subiekt_connect'),
     path('subiekt/callback', views.subiekt_callback, name='subiekt_callback'),
