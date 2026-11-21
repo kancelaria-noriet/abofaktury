@@ -47,6 +47,16 @@ class CredentialsTests(CredentialsMixin, TestCase):
         with self.assertRaisesRegex(subiekt.SubiektError, 'ClientSecret, SubscriptionKey'):
             subiekt.credentials()
 
+    @override_settings(SUBIEKT_CLIENT_ID='env-id', SUBIEKT_CLIENT_SECRET='env+secret', SUBIEKT_SUBSCRIPTION_KEY='env-key')
+    def test_env_vars_come_first(self):
+        self.assertEqual(subiekt.credentials(), {'ClientId': 'env-id', 'ClientSecret': 'env+secret',
+                                                 'SubscriptionKey': 'env-key'})
+
+    @override_settings(SUBIEKT_CLIENT_ID='env-id', SUBIEKT_CLIENT_SECRET='', SUBIEKT_SUBSCRIPTION_KEY='')
+    def test_incomplete_env_vars(self):
+        with self.assertRaisesRegex(subiekt.SubiektError, 'SUBIEKT_CLIENT_SECRET, SUBIEKT_SUBSCRIPTION_KEY'):
+            subiekt.credentials()
+
     @override_settings(SUBIEKT_CREDENTIALS_FILE='/nonexistent/subiekt-api.env')
     def test_missing_file(self):
         with self.assertRaisesRegex(subiekt.SubiektError, 'nie można wczytać'):

@@ -1,0 +1,65 @@
+{% extends 'billing/base.html' %}
+
+{% block title %}E-maile - {{ month.label }}{% endblock %}
+
+{% block content %}
+<h1>E-maile z fakturą i raportem - {{ month.label }}</h1>
+<p class="muted">Podgląd. Nic nie jest jeszcze wysyłane. Nadawca: {{ from_address|default:"(brak)" }}.
+  <a href="{% url 'month' month.key %}">Wróć do rozliczeń</a></p>
+
+{% if test %}
+<section class="panel warn">
+  <p><strong>Tryb testowy:</strong> wszystkie e-maile idą tylko do {{ test_recipient }}. Załącznik z fakturą to faktura
+    testowa. Prawdziwi odbiorcy są pokazani tylko w podglądzie.</p>
+</section>
+{% endif %}
+
+{% if problem %}
+<section class="panel warn"><p>{{ problem }}{% if 'Gmail' in problem %} <a href="{% url 'gmail' %}">Połącz z Gmail</a>.{% endif %}</p></section>
+{% endif %}
+
+<form method="post" action="{% url 'email_batch_send' month.key %}">
+  {% csrf_token %}
+  <table class="data">
+    <thead>
+      <tr><th>Wyślij</th><th>Klient</th><th>Do</th><th>Temat i załączniki</th><th>Uwagi</th></tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr{% if row.problem or row.last_send %} class="row-warn"{% endif %}>
+        <td>{% if row.can_send and not problem %}
+          <input type="checkbox" name="send" value="{{ row.client.key }}" aria-label="Wyślij: {{ row.client.name }}"
+                 {% if not row.last_send %}checked{% endif %}>{% endif %}</td>
+        <td>{{ row.client.name }}</td>
+        <td>
+          {{ row.send_to|join:", "|default:"—" }}
+          {% if row.test %}<br><span class="muted small">prawdziwi odbiorcy: {{ row.recipients|join:", "|default:"brak" }}</span>{% endif %}
+        </td>
+        <td>{{ row.subject }}<br><span class="muted small">{{ row.invoice_filename }}, {{ row.report_filename }}</span></td>
+        <td>
+          {% if row.problem %}<span class="missing">{{ row.problem }}</span>{% endif %}
+          {% if row.last_send %}
+          Wysłano już {{ row.last_send.sent_at|date:"j.m H:i" }} do {{ row.last_send.recipients }}.<br>
+          <label><input type="checkbox" name="resend_{{ row.client.key }}" value="1"> wyślij ponownie (zaznacz też „Wyślij”)</label>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="muted">Brak klientów.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not problem %}
+  <div class="toolbar">
+    <button type="submit" class="button primary">Wyślij zaznaczone e-maile</button>
+    <span class="muted small">E-maile wychodzą jeden po drugim.</span>
+  </div>
+  {% endif %}
+</form>
+{% if rows %}
+<details>
+  <summary>Treść e-maila (pierwszy klient)</summary>
+  <pre>{{ rows.0.text }}</pre>
+</details>
+{% endif %}
+{% endblock %}

@@ -43,10 +43,18 @@ class NotConnected(SubiektError):
 
 
 def credentials():
-    """Read ClientId, ClientSecret and SubscriptionKey from settings.SUBIEKT_CREDENTIALS_FILE."""
+    """ClientId, ClientSecret and SubscriptionKey: from the env vars, or from SUBIEKT_CREDENTIALS_FILE."""
+    from_env = {'ClientId': settings.SUBIEKT_CLIENT_ID, 'ClientSecret': settings.SUBIEKT_CLIENT_SECRET,
+                'SubscriptionKey': settings.SUBIEKT_SUBSCRIPTION_KEY}
+    if any(from_env.values()):
+        missing = [name for name, key in (('SUBIEKT_CLIENT_ID', 'ClientId'), ('SUBIEKT_CLIENT_SECRET', 'ClientSecret'),
+                                          ('SUBIEKT_SUBSCRIPTION_KEY', 'SubscriptionKey')) if not from_env[key]]
+        if missing:
+            raise SubiektError('brak zmiennych: ' + ', '.join(missing))
+        return from_env
     path = settings.SUBIEKT_CREDENTIALS_FILE
     if not path:
-        raise SubiektError('brak pliku z danymi dostępowymi (SUBIEKT_CREDENTIALS_FILE)')
+        raise SubiektError('brak danych dostępowych (SUBIEKT_CLIENT_ID itd. albo SUBIEKT_CREDENTIALS_FILE)')
     try:
         with open(path, encoding='utf-8') as f:
             lines = f.read().splitlines()
@@ -196,8 +204,8 @@ def _error_text(response):
     return str(body)[:300]
 
 
-def _api(method, path, params=None, body=None):
-    """Call the Subiekt 123 API. Return the JSON answer, or None for an empty answer (204)."""
+def _api(method, path, params=None, body=None, raw=False):
+    """Call the Subiekt 123 API. Return the JSON answer, None for an empty answer (204), or the bytes (raw)."""
     headers = {
         'Authorization': f'Bearer {access_token()}',
         'Ocp-Apim-Subscription-Key': credentials()['SubscriptionKey'],
@@ -215,6 +223,8 @@ def _api(method, path, params=None, body=None):
         raise NotFound(f'Subiekt 123: nie znaleziono ({path})')
     if response.status_code not in (200, 201, 204):
         raise SubiektError(f'Subiekt 123 zwrócił błąd {response.status_code}: {_error_text(response)}')
+    if raw:
+        return response.content
     if response.status_code == 204 or not response.content:
         return None
     try:
@@ -399,6 +409,24 @@ def delete_document(document_id):
     _api('DELETE', f'/documents/{document_id}')
 
 
+def document_id_by_number(number):
+    """The ID of the document with this number (exact match), for example "FS 29/10/2026"."""
+    items, _ = _page(api_get('/documents', {'pageNumber': 0, 'pageSize': MAX_PAGE_SIZE,
+                                            'filters': f'documentNumber={number}'}))
+    hits = [item for item in items if item.get('documentNumber') == number]
+    if len(hits) != 1:
+        raise SubiektError(f'nie znaleziono w Subiekcie jednego dokumentu o numerze {number}')
+    return hits[0]['id']
+
+
+def document_pdf(document_id):
+    """The PDF of a document (the original, not a duplicate)."""
+    pdf = _api('POST', f'/documents/{document_id}/printing', body={'duplicateDate': None, 'ecoMode': False}, raw=True)
+    if not pdf or not pdf.startswith(b'%PDF'):
+        raise SubiektError(f'Subiekt 123 nie zwrócił pliku PDF: {pdf[:100]!r}')
+    return pdf
+
+
 SUBSCRIPTION_LINE = 'usługa prawna - abonament'
 
 
@@ -415,12 +443,12 @@ def documents_issued_between(first_day, next_first_day, max_pages=100):
     return found
 
 
-def client_invoices(nip, first_day, next_first_day):
-    """The invoices of the client (by NIP) issued in the period, with the names of their lines."""
+def client_invoices(documents, nip):
+    """The invoices of the client (by NIP) in a list of documents, with the names of their lines."""
     digits = nip_digits(nip)
     invoices = []
-    for item in documents_issued_between(first_day, next_first_day):
-        if item.get('kind') != 'Invoice' or nip_digits(item.get('clientTin')) != digits:
+    for item in documents:
+        if item.get('kind') != 'Invoice' or not digits or nip_digits(item.get('clientTin')) != digits:
             continue
         document = get_document(item['id']) or {}
         lines = [line.get('productName') for line in document.get('items') or []]

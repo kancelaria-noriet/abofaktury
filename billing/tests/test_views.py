@@ -56,6 +56,12 @@ class ViewTests(FakeSheetMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Polityka prywatności')
 
+    def test_healthz_is_public_and_shows_no_data(self):
+        self.client.logout()
+        response = self.client.get('/healthz')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'ok\n')
+
     def test_index_redirects_to_a_month(self):
         response = self.client.get(reverse('index'))
         self.assertEqual(response.status_code, 302)

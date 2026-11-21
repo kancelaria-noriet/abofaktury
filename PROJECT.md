@@ -25,7 +25,15 @@ To do - fill in after the demo feedback. Short version for now:
   `SubiektConnection` (one row, not in the admin), refresh, the client and product lookup, and the invoice:
   `build_invoice()` (pure), create, read and delete. `SubiektInvoice` stores one invoice for each client and
   month. The app never sends to KSeF; the operator does that in Subiekt.
-- Every page needs a login (`LoginRequiredMiddleware`). The admin login form is the login page.
+- `billing/gmail.py` and `billing/mailing.py`: the Gmail connection (OAuth with PKCE, the code pasted by hand,
+  scope `gmail.send`) and the email with the invoice and the report. The text is in
+  `templates/billing/email/`. `EmailSend` logs every email. A test mode sends only to a test address.
+- Every page needs a login (`LoginRequiredMiddleware`). The admin login form is the login page. Only
+  `/privacy` and `/healthz` are public. Every view that changes data accepts only POST with CSRF.
+- Deployment: `Dockerfile` and `start.sh` (migrate, then gunicorn). Production settings apply when
+  `DJANGO_DEBUG` is not `1`: HTTPS behind a proxy, WhiteNoise, logs to stdout, SQLite at `DJANGO_DB_PATH`.
+  Secrets come from env vars in production and from files in local dev. Errors go to Bugsink
+  (`BUGSINK_DSN`), with no personal data and no secrets (`_scrub_event` in the settings).
 
 ## Decisions
 

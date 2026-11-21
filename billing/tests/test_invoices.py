@@ -220,7 +220,7 @@ class InvoiceViewTests(FakeSheetMixin, CredentialsMixin, DjangoTestCase):
         invoice = SubiektInvoice.objects.get(client__key='gamma', invoice_month='2026-11')
         self.assertEqual((invoice.document_id, invoice.document_number), ('doc-1', 'FS 1/11/2026'))
         self.assertEqual((invoice.net, invoice.gross), (Decimal('5500.00'), Decimal('6765.00')))
-        self.assertContains(page, 'Utworzono fakturę FS 1/11/2026 w Subiekcie')
+        self.assertContains(page, 'Gamma Sp. k.: utworzono fakturę FS 1/11/2026 w Subiekcie.')
         self.assertNotContains(page, 'różnią się')
         self.assertContains(page, 'Faktura w Subiekcie: <strong>FS 1/11/2026</strong>', html=False)
 
@@ -240,14 +240,14 @@ class InvoiceViewTests(FakeSheetMixin, CredentialsMixin, DjangoTestCase):
     def test_different_totals_give_a_warning(self):
         self.api.totals = {'totalNet': 5500.0, 'totalGross': 6765.0, 'leftToPay': 6765.0}
         page = self.create()
-        self.assertContains(page, 'Sumy w Subiekcie różnią się od wyliczenia aplikacji: do zapłaty')
+        self.assertContains(page, 'sumy w Subiekcie różnią się od wyliczenia aplikacji: do zapłaty')
 
     def test_missing_client_in_subiekt_stops(self):
         response = self.preview('alfa')   # NIP 1111111111 is not in Subiekt
         self.assertContains(response, 'brak kontrahenta w Subiekcie z NIP 1111111111')
         self.assertNotContains(response, 'name="signature"')
         page = self.create(signature='x', key='alfa')
-        self.assertContains(page, 'Nie utworzono faktury: brak kontrahenta')
+        self.assertContains(page, 'Alfa Sp. z o.o.: nie utworzono faktury: brak kontrahenta')
         self.assertEqual(self.api.count('POST', '/documents'), 0)
 
     def delete(self):
@@ -275,3 +275,70 @@ class InvoiceViewTests(FakeSheetMixin, CredentialsMixin, DjangoTestCase):
         self.assertEqual(self.api.count('DELETE', '/documents/doc-1'), 0)
         self.assertFalse(SubiektInvoice.objects.exists())
         self.assertContains(page, 'nie ma w Subiekcie')
+
+
+@override_settings(SUBIEKT_ISSUER='JAN TESTOWY')
+class BatchCreateTests(FakeSheetMixin, CredentialsMixin, DjangoTestCase):
+    """Alfa is not in the fake Subiekt; Gamma is. Beta and Delta have no NIP match either."""
+
+    fixtures = ['test_clients']
+    tabs = TABS
+
+    def setUp(self):
+        super().setUp()
+        user = get_user_model().objects.create_user('operator', password='x')
+        self.client.force_login(user)
+        save_connection(expires_in=3600)
+        self.api = FakeSubiekt()
+        patch = mock.patch.object(subiekt.requests, 'request', side_effect=self.api)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def preview(self):
+        response = self.client.get(reverse('subiekt_batch', args=['2026-11']))
+        self.assertEqual(response.status_code, 200)
+        return response, {draft.client.key: draft for draft in response.context['drafts']}
+
+    def test_preview_loads_the_subiekt_data_once(self):
+        _, drafts = self.preview()
+        self.assertTrue(drafts['gamma'].can_create)
+        self.assertIn('brak kontrahenta', drafts['alfa'].problem)
+        self.assertEqual(self.api.count('GET', '/clients'), 1)
+        self.assertEqual(self.api.count('GET', '/products'), 1)
+        self.assertEqual(self.api.count('GET', '/documents'), 1)
+        self.assertEqual(self.api.count('POST', '/documents'), 0)
+
+    def test_batch_creates_the_ticked_invoices(self):
+        response, drafts = self.preview()
+        self.assertContains(response, 'name="create" value="gamma"')
+        self.assertNotContains(response, 'name="create" value="alfa"')    # a problem: no checkbox
+        page = self.client.post(reverse('subiekt_batch_create', args=['2026-11']),
+                                {'create': ['gamma'], 'sig_gamma': drafts['gamma'].signature}, follow=True)
+        self.assertEqual(self.api.count('POST', '/documents'), 1)
+        self.assertContains(page, 'Gamma Sp. k.: utworzono fakturę FS 1/11/2026 w Subiekcie.')
+        self.assertTrue(SubiektInvoice.objects.filter(client__key='gamma', invoice_month='2026-11').exists())
+        # A second batch skips the client that has an invoice now.
+        _, drafts = self.preview()
+        self.assertFalse(drafts['gamma'].can_create)
+        page = self.client.post(reverse('subiekt_batch_create', args=['2026-11']),
+                                {'create': ['gamma'], 'sig_gamma': 'x'}, follow=True)
+        self.assertContains(page, 'Gamma Sp. k.: faktura już istnieje (FS 1/11/2026).')
+        self.assertEqual(self.api.count('POST', '/documents'), 1)
+
+    def test_batch_needs_the_confirmation_for_a_second_subscription(self):
+        self.api.listed.append(({'id': 'o1', 'documentNumber': 'FS 7/11/2026', 'issueDate': '2026-11-05T00:00:00',
+                                 'kind': 'Invoice', 'clientTin': '3333333333', 'totalNet': 4500.0, 'ksefNumber': 'K'},
+                                [{'productName': 'usługa prawna - abonament'}]))
+        response, drafts = self.preview()
+        self.assertTrue(drafts['gamma'].needs_confirmation)
+        self.assertContains(response, 'name="confirm_gamma"')
+        data = {'create': ['gamma'], 'sig_gamma': drafts['gamma'].signature}
+        page = self.client.post(reverse('subiekt_batch_create', args=['2026-11']), data, follow=True)
+        self.assertContains(page, 'fakturę z abonamentem')
+        self.assertEqual(self.api.count('POST', '/documents'), 0)
+        self.client.post(reverse('subiekt_batch_create', args=['2026-11']), {**data, 'confirm_gamma': '1'})
+        self.assertEqual(self.api.count('POST', '/documents'), 1)
+
+    def test_nothing_ticked(self):
+        page = self.client.post(reverse('subiekt_batch_create', args=['2026-11']), {}, follow=True)
+        self.assertContains(page, 'Nie zaznaczono żadnego klienta.')

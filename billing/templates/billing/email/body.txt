@@ -1,0 +1,6 @@
+{% autoescape off %}Dzień dobry,
+
+w załączeniu przesyłamy fakturę nr {{ number }} oraz raport godzin za {{ work_month.label }}.
+
+Z poważaniem,
+Kancelaria Noriet{% endautoescape %}

@@ -1,0 +1,60 @@
+{% extends 'billing/base.html' %}
+
+{% block title %}Faktury w Subiekcie - {{ month.label }}{% endblock %}
+
+{% block content %}
+<h1>Faktury w Subiekcie - {{ month.label }}</h1>
+<p class="muted">Podgląd faktur wszystkich aktywnych klientów. Nic nie jest jeszcze tworzone.
+  <a href="{% url 'month' month.key %}">Wróć do rozliczeń</a></p>
+
+{% if not connection %}
+<section class="panel warn"><p>Subiekt nie jest połączony. <a href="{% url 'subiekt' %}">Połącz z Subiektem</a>.</p></section>
+{% elif problem %}
+<section class="panel warn"><p>{{ problem }}</p></section>
+{% else %}
+<form method="post" action="{% url 'subiekt_batch_create' month.key %}">
+  {% csrf_token %}
+  <table class="data">
+    <thead>
+      <tr><th>Utwórz</th><th>Klient</th><th>Pozycje</th><th class="num">Netto</th><th class="num">Brutto</th>
+        <th class="num">Do zapłaty</th><th>Uwagi</th></tr>
+    </thead>
+    <tbody>
+      {% for draft in drafts %}
+      <tr{% if draft.problem or draft.needs_confirmation or draft.result.warnings %} class="row-warn"{% endif %}>
+        <td>
+          {% if draft.can_create %}
+          <input type="checkbox" name="create" value="{{ draft.client.key }}" aria-label="Utwórz: {{ draft.client.name }}"
+                 {% if not draft.needs_confirmation %}checked{% endif %}>
+          <input type="hidden" name="sig_{{ draft.client.key }}" value="{{ draft.signature }}">
+          {% endif %}
+        </td>
+        <td><a href="{% url 'subiekt_invoice' month.key draft.client.key %}">{{ draft.client.name }}</a></td>
+        <td>{% for line in draft.result.lines %}{{ line.name }} ({{ line.quantity|floatformat:"-1" }} {{ line.unit }}){% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">brak</span>{% endfor %}</td>
+        <td class="num">{{ draft.result.net|floatformat:"2g" }}</td>
+        <td class="num">{{ draft.result.gross|floatformat:"2g" }}</td>
+        <td class="num">{{ draft.result.to_pay|floatformat:"2g" }}</td>
+        <td>
+          {% if draft.existing %}Już utworzona: <strong>{{ draft.existing.document_number|default:"bez numeru" }}</strong>{% endif %}
+          {% if draft.problem %}<span class="missing">{{ draft.problem }}</span>{% endif %}
+          {% if draft.needs_confirmation %}
+          Klient ma już w tym miesiącu fakturę z abonamentem:
+          {% for invoice in draft.other_invoices %}{% if invoice.has_subscription %}{{ invoice.number }} {% endif %}{% endfor %}<br>
+          <label><input type="checkbox" name="confirm_{{ draft.client.key }}" value="1">
+            wystaw mimo to (zaznacz też „Utwórz”)</label>
+          {% elif draft.other_invoices %}
+          Inne faktury w tym miesiącu: {% for invoice in draft.other_invoices %}{{ invoice.number }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          {% endif %}
+          {% for warning in draft.result.warnings %}<br><span class="small">{{ warning }}</span>{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="toolbar">
+    <button type="submit" class="button primary">Utwórz zaznaczone faktury w Subiekcie</button>
+    <span class="muted small">Faktury powstają jedna po drugiej. Aplikacja nie wysyła ich do KSeF.</span>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

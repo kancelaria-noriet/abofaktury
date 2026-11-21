@@ -29,7 +29,12 @@ if not SECRET_KEY:
         raise RuntimeError('Set DJANGO_SECRET_KEY, or set DJANGO_DEBUG=1 for local dev.')
     SECRET_KEY = 'django-insecure-local-dev-only'
 
-ALLOWED_HOSTS = [h for h in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()]
+# The health check runs inside the container against localhost, so localhost is always allowed.
+ALLOWED_HOSTS += [h for h in ('localhost', '127.0.0.1') if h not in ALLOWED_HOSTS]
+
+# The public origin(s) of the app, for example https://app.example.com (comma-separated).
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]
 
 
 # Application definition
@@ -46,6 +51,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -81,7 +87,8 @@ WSGI_APPLICATION = 'abofaktury.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # In a container, put the database on a persistent volume, for example /data/db.sqlite3.
+        'NAME': os.environ.get('DJANGO_DB_PATH') or BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -122,6 +129,39 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# WhiteNoise serves the static files. In production the names carry a hash (collectstatic at build time).
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage' if DEBUG
+                    else 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
+
+# Production behind a reverse proxy that ends TLS and sends X-Forwarded-Proto.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', '3600'))
+    SILENCED_SYSTEM_CHECKS = [
+        'security.W008',   # SECURE_SSL_REDIRECT stays off: the proxy redirects, and the health check uses HTTP.
+        'security.W005',   # no includeSubDomains: the app does not decide for other hosts of the domain.
+        'security.W021',   # no HSTS preload.
+    ]
+
+# Logs go to stdout (the container log).
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {'plain': {'format': '{asctime} {levelname} {name}: {message}', 'style': '{'}},
+    'handlers': {'console': {'class': 'logging.StreamHandler', 'stream': 'ext://sys.stdout', 'formatter': 'plain'}},
+    'root': {'handlers': ['console'], 'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO')},
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        # WeasyPrint logs every rendering step at INFO.
+        'weasyprint': {'level': 'WARNING'},
+        'fontTools': {'level': 'WARNING'},
+    },
+}
 
 # Every page needs a login (LoginRequiredMiddleware). The admin login form is the login page.
 LOGIN_URL = 'admin:login'
@@ -131,15 +171,74 @@ GOOGLE_SHEET_ID = os.environ.get('GOOGLE_SHEET_ID', '')
 GOOGLE_SA_KEY_FILE = os.environ.get('GOOGLE_SA_KEY_FILE', '')   # path to the service account JSON key
 GOOGLE_SA_KEY_JSON = os.environ.get('GOOGLE_SA_KEY_JSON', '')   # or the JSON key itself (prod secret)
 
-# Subiekt 123 API (InsERT). The credentials file has the lines ClientId=, ClientSecret= and
-# SubscriptionKey=. The redirect URI must be the same as in the app registration in the portal.
+# Subiekt 123 API (InsERT). The credentials come from three env vars (production), or from a file with
+# the lines ClientId=, ClientSecret= and SubscriptionKey= (local dev).
+# The redirect URI must be the same as in the app registration in the portal.
+SUBIEKT_CLIENT_ID = os.environ.get('SUBIEKT_CLIENT_ID', '')
+SUBIEKT_CLIENT_SECRET = os.environ.get('SUBIEKT_CLIENT_SECRET', '')
+SUBIEKT_SUBSCRIPTION_KEY = os.environ.get('SUBIEKT_SUBSCRIPTION_KEY', '')
 SUBIEKT_CREDENTIALS_FILE = os.environ.get('SUBIEKT_CREDENTIALS_FILE', '')
 SUBIEKT_REDIRECT_URI = os.environ.get('SUBIEKT_REDIRECT_URI', '')
 SUBIEKT_API_BASE = os.environ.get('SUBIEKT_API_BASE', 'https://api.subiekt123.pl/1.1')
 SUBIEKT_ISSUER = os.environ.get('SUBIEKT_ISSUER', '')   # the issuer name on the invoices (a person)
 SUBIEKT_PLACE = os.environ.get('SUBIEKT_PLACE', '')     # the place of issue, for example a city
 
+# Email through the Gmail API (step 3). The OAuth client of type "Desktop app" comes as JSON in
+# GMAIL_CLIENT_JSON (production) or in the file GMAIL_CLIENT_FILE (local dev). EMAIL_FROM is the From
+# address (a "send as" alias of the connected account).
+# Test mode: with EMAIL_TEST_RECIPIENT set, every email goes only to that address, and every email has
+# the invoice EMAIL_TEST_INVOICE_NUMBER (downloaded from Subiekt at send time) instead of the real one.
+GMAIL_CLIENT_JSON = os.environ.get('GMAIL_CLIENT_JSON', '')
+GMAIL_CLIENT_FILE = os.environ.get('GMAIL_CLIENT_FILE', '')
+EMAIL_ACCOUNT = os.environ.get('EMAIL_ACCOUNT', '')       # the account to connect (a login hint only)
+EMAIL_FROM = os.environ.get('EMAIL_FROM', '')
+EMAIL_TEST_RECIPIENT = os.environ.get('EMAIL_TEST_RECIPIENT', '')
+EMAIL_TEST_INVOICE_NUMBER = os.environ.get('EMAIL_TEST_INVOICE_NUMBER', '')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Error reporting (Bugsink, Sentry SDK). Silent without BUGSINK_DSN (local dev, tests).
+import sentry_sdk  # noqa: E402
+from django.core.exceptions import SuspiciousOperation  # noqa: E402
+from sentry_sdk.integrations.logging import ignore_logger  # noqa: E402
+
+BUGSINK_DSN = os.environ.get('BUGSINK_DSN', '')
+# A constant release ("HEAD") hides regressions; it is worse than no release.
+BUGSINK_RELEASE = os.environ.get('SOURCE_COMMIT', '')
+if BUGSINK_RELEASE in ('', 'HEAD'):
+    BUGSINK_RELEASE = None
+
+
+def _scrub_event(event, hint):
+    """Never send a secret: drop cookies, auth headers, the query string (OAuth codes) and the body."""
+    request = event.get('request') or {}
+    request.pop('cookies', None)
+    request.pop('data', None)
+    request.pop('query_string', None)
+    headers = request.get('headers') or {}
+    for name in list(headers):
+        if name.lower() in ('authorization', 'cookie', 'x-csrftoken', 'ocp-apim-subscription-key'):
+            headers[name] = '[Filtered]'
+    return event
+
+
+if BUGSINK_DSN:
+    sentry_sdk.init(
+        dsn=BUGSINK_DSN,
+        # Bugsink stores error events only.
+        traces_sample_rate=0,
+        profiles_sample_rate=0,
+        # The app holds client data of a law firm: no request bodies, no user data.
+        send_default_pii=False,
+        before_send=_scrub_event,
+        environment=os.environ.get('APP_ENV', 'production'),
+        release=BUGSINK_RELEASE,
+        max_breadcrumbs=25,
+        # Expected faults caused by a client. DisallowedHost is a SuspiciousOperation.
+        ignore_errors=[SuspiciousOperation, BrokenPipeError, ConnectionResetError],
+    )
+    ignore_logger('django.security.DisallowedHost')

@@ -13,6 +13,7 @@
       <a href="{% url 'index' %}">Rozliczenia</a>
       <a href="{% url 'admin:billing_client_changelist' %}">Konfiguracja klientów</a>
       <a href="{% url 'subiekt' %}">Subiekt</a>
+      <a href="{% url 'gmail' %}">Gmail</a>
       <form method="post" action="{% url 'admin:logout' %}">
         {% csrf_token %}
         <button type="submit" class="link">Wyloguj ({{ request.user.get_username }})</button>

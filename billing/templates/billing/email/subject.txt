@@ -1,0 +1,1 @@
+{% autoescape off %}{% if test %}[TEST] {% endif %}Faktura {{ number }} – {{ month.label }}{% endautoescape %}

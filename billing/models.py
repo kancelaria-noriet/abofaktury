@@ -55,6 +55,12 @@ class Client(models.Model):
                   'Nadgodziny z okresu są na fakturze za miesiąc po jego końcu. '
                   'Abonament i raport godzin są co miesiąc.',
     )
+    invoice_emails = models.CharField(
+        'e-mail do faktur',
+        max_length=500,
+        blank=True,
+        help_text='Adresy, na które aplikacja wysyła fakturę i raport. Kilka adresów oddziel przecinkami.',
+    )
     active = models.BooleanField('aktywny', default=True)
 
     class Meta:
@@ -64,6 +70,10 @@ class Client(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def email_list(self):
+        return [address.strip() for address in self.invoice_emails.replace(';', ',').split(',') if address.strip()]
 
 
 class SubiektConnection(models.Model):
@@ -102,3 +112,32 @@ class SubiektInvoice(models.Model):
 
     def __str__(self):
         return f'{self.document_number or self.document_id} ({self.client}, {self.invoice_month})'
+
+
+class GmailConnection(models.Model):
+    """The OAuth tokens for the Gmail API (scope gmail.send). At most one row (pk=1); not in the admin."""
+
+    access_token = models.TextField()
+    refresh_token = models.TextField()
+    expires_at = models.DateTimeField()
+    account = models.CharField('konto', max_length=200, blank=True)
+    connected_at = models.DateTimeField('połączono')
+
+
+class EmailSend(models.Model):
+    """One sent email with the invoice and the report (also the test emails)."""
+
+    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='email_sends')
+    invoice_month = models.CharField('miesiąc faktury', max_length=7)   # YYYY-MM
+    invoice = models.ForeignKey(SubiektInvoice, on_delete=models.SET_NULL, null=True, blank=True)
+    invoice_number = models.CharField('numer faktury', max_length=50)
+    recipients = models.CharField('odbiorcy', max_length=500)
+    subject = models.CharField('temat', max_length=300)
+    message_id = models.CharField('ID wiadomości Gmail', max_length=100, blank=True)
+    test = models.BooleanField('test', default=False)
+    sent_at = models.DateTimeField('wysłano')
+
+    class Meta:
+        ordering = ['-sent_at']
+        verbose_name = 'wysłany e-mail'
+        verbose_name_plural = 'wysłane e-maile'

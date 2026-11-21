@@ -19,6 +19,8 @@
   <a class="button" href="{% url 'index' %}">Bieżący miesiąc</a>
   <span class="spacer"></span>
   <a class="button primary" href="{% url 'month' month.key %}">Generuj ponownie</a>
+  {% if subiekt %}<a class="button" href="{% url 'subiekt_batch' month.key %}">Utwórz faktury w Subiekcie</a>{% endif %}
+  <a class="button" href="{% url 'email_batch' month.key %}">Wyślij e-maile</a>
   <span class="muted small">Dane z arkusza wczytane: {{ generated_at|time:"H:i:s" }}.
     <a href="{% url 'subiekt' %}">Subiekt: {% if subiekt %}połączono{% else %}nie połączono{% endif %}</a></span>
 </div>
@@ -254,6 +256,11 @@
     <span class="muted small"><a href="{% url 'subiekt' %}">Połącz z Subiektem</a>, aby tworzyć faktury.</span>
     {% endif %}
   </div>
+
+  {% if result.last_email %}
+  <p class="small">E-mail{% if result.last_email.test %} testowy{% endif %}: wysłano {{ result.last_email.sent_at|date:"j.m.Y H:i" }}
+    do {{ result.last_email.recipients }} ({{ result.last_email.invoice_number }}).</p>
+  {% endif %}
 
   <h3>Wpisy - {{ result.work_month.label }}</h3>
   <table class="data">
