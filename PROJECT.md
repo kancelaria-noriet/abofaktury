@@ -24,7 +24,8 @@ To do - fill in after the demo feedback. Short version for now:
 - `billing/subiekt.py`: the Subiekt 123 API. OAuth 2.0 with PKCE at kontoapi.insert.com.pl, the tokens in
   `SubiektConnection` (one row, not in the admin), refresh, the client and product lookup, and the invoice:
   `build_invoice()` (pure), create, read and delete. `SubiektInvoice` stores one invoice for each client and
-  month. The app never sends to KSeF; the operator does that in Subiekt.
+  month. The app never sends to KSeF; the operator does that in Subiekt. The API does not give the company's
+  bank accounts and does not use the default account of the web UI, so the account comes from the settings.
 - `billing/gmail.py` and `billing/mailing.py`: the Gmail connection (OAuth with PKCE, a "Web application"
   client, the callback `/gmail/callback` checks the `state`; scope `gmail.send`) and the email with the
   invoice and the report. The text is in `templates/billing/email/`. `EmailSend` logs every email. A test

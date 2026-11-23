@@ -38,17 +38,21 @@ def result_with_all_lines():
     ])
 
 
+BANK = {'name': 'Bank Testowy', 'number': '00 1111 2222 3333 4444 5555 6666'}
+
+
 class BuildInvoiceTests(TestCase):
     def test_body(self):
         products = subiekt.find_products(PRODUCTS, ALL_SYMBOLS)
         body = subiekt.build_invoice(result_with_all_lines(), GAMMA, products, 'JAN TESTOWY', date(2026, 11, 18),
-                                     'Testowo')
+                                     'Testowo', BANK)
         self.assertEqual({k: body[k] for k in ('kind', 'eInvoice', 'currency', 'issuer', 'calculationMethod',
                                               'paymentMethod', 'splitPayment', 'communityTransaction',
                                               'transactionLocation')},
                          {'kind': 'Invoice', 'eInvoice': True, 'currency': 'PLN', 'issuer': 'JAN TESTOWY',
                           'calculationMethod': 'Net', 'paymentMethod': 'BankTransfer', 'splitPayment': 'False',
                           'communityTransaction': 'SK', 'transactionLocation': 'Testowo'})
+        self.assertEqual(body['bankAccount'], BANK)
         self.assertEqual((body['issueDate'], body['deliveryDate'], body['taxLiabilityDate'], body['dueDate']),
                          ('2026-11-18T00:00:00', '2026-11-18T00:00:00', '2026-11-18T00:00:00', '2026-11-25T00:00:00'))
         self.assertEqual(body['client']['sourceClientId'], 'c-gamma')
@@ -66,18 +70,23 @@ class BuildInvoiceTests(TestCase):
         client = SimpleNamespace(subscription_net=Decimal('750'), included_hours=Decimal('0'),
                                  overtime_rate_net=Decimal('0'), overtime_period_months=1, nip='1', address='a')
         result = calculate(client, Month(2026, 11), [])
-        body = subiekt.build_invoice(result, GAMMA, subiekt.find_products(PRODUCTS, ALL_SYMBOLS), 'X', date(2026, 11, 18))
+        body = subiekt.build_invoice(result, GAMMA, subiekt.find_products(PRODUCTS, ALL_SYMBOLS), 'X', date(2026, 11, 18),
+                                     bank_account={'number': '00 1'})
         # The API requires the field; an empty list means that nothing is paid yet.
         self.assertEqual(body['payments'], [])
         self.assertNotIn('transactionLocation', body)   # no place set
+        self.assertEqual(body['bankAccount'], {'name': None, 'number': '00 1'})   # no name set
 
-    def test_no_lines_and_no_issuer_are_errors(self):
+    def test_no_lines_no_issuer_and_no_bank_account_are_errors(self):
         client = SimpleNamespace(subscription_net=Decimal('0'), included_hours=Decimal('0'),
                                  overtime_rate_net=Decimal('300'), overtime_period_months=1, nip='1', address='a')
         with self.assertRaisesRegex(subiekt.SubiektError, 'nie ma pozycji'):
             subiekt.build_invoice(calculate(client, Month(2026, 11), []), GAMMA, {}, 'X', date(2026, 11, 18))
         with self.assertRaisesRegex(subiekt.SubiektError, 'SUBIEKT_ISSUER'):
             subiekt.build_invoice(result_with_all_lines(), GAMMA, {}, '', date(2026, 11, 18))
+        for bank_account in (None, {'name': 'Bank', 'number': ''}):
+            with self.assertRaisesRegex(subiekt.SubiektError, 'SUBIEKT_BANK_ACCOUNT_NUMBER'):
+                subiekt.build_invoice(result_with_all_lines(), GAMMA, {}, 'X', date(2026, 11, 18), '', bank_account)
 
     def test_find_products_takes_the_service(self):
         found = subiekt.find_products(PRODUCTS, ['69.10.1 opłata'])
@@ -144,7 +153,7 @@ TABS = {'Gamma 2026': make_tab({10: [('a', 21), ('KZP Kowalski 1000 zł + VAT (D
         'Alfa_2026': make_tab({10: [('analiza', 2)]})}
 
 
-@override_settings(SUBIEKT_ISSUER='JAN TESTOWY')
+@override_settings(SUBIEKT_ISSUER='JAN TESTOWY', SUBIEKT_BANK_ACCOUNT_NUMBER='00 1')
 class InvoiceViewTests(FakeSheetMixin, CredentialsMixin, DjangoTestCase):
     fixtures = ['test_clients']
     tabs = TABS
@@ -277,7 +286,7 @@ class InvoiceViewTests(FakeSheetMixin, CredentialsMixin, DjangoTestCase):
         self.assertContains(page, 'nie ma w Subiekcie')
 
 
-@override_settings(SUBIEKT_ISSUER='JAN TESTOWY')
+@override_settings(SUBIEKT_ISSUER='JAN TESTOWY', SUBIEKT_BANK_ACCOUNT_NUMBER='00 1')
 class BatchCreateTests(FakeSheetMixin, CredentialsMixin, DjangoTestCase):
     """Alfa is not in the fake Subiekt; Gamma is. Beta and Delta have no NIP match either."""
 

@@ -182,6 +182,10 @@ SUBIEKT_REDIRECT_URI = os.environ.get('SUBIEKT_REDIRECT_URI', '')
 SUBIEKT_API_BASE = os.environ.get('SUBIEKT_API_BASE', 'https://api.subiekt123.pl/1.1')
 SUBIEKT_ISSUER = os.environ.get('SUBIEKT_ISSUER', '')   # the issuer name on the invoices (a person)
 SUBIEKT_PLACE = os.environ.get('SUBIEKT_PLACE', '')     # the place of issue, for example a city
+# The bank account on the invoices. The API does not give the company's accounts, and it does not use
+# the default account of the web UI, so the app must send it.
+SUBIEKT_BANK_ACCOUNT_NAME = os.environ.get('SUBIEKT_BANK_ACCOUNT_NAME', '')
+SUBIEKT_BANK_ACCOUNT_NUMBER = os.environ.get('SUBIEKT_BANK_ACCOUNT_NUMBER', '')
 
 # Email through the Gmail API (step 3). The OAuth client of type "Web application" comes as JSON in
 # GMAIL_CLIENT_JSON (production) or in the file GMAIL_CLIENT_FILE (local dev). GMAIL_REDIRECT_URI is

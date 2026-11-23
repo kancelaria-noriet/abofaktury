@@ -261,12 +261,16 @@ def _drafts(clients, month):
                                   if line.name in subiekt.PRODUCT_SYMBOLS})
                 products = subiekt.find_products(lookup.products(), symbols)
                 draft.body = subiekt.build_invoice(result, subiekt_client, products, settings.SUBIEKT_ISSUER,
-                                                   timezone.localdate(), settings.SUBIEKT_PLACE)
+                                                   timezone.localdate(), settings.SUBIEKT_PLACE, _bank_account())
                 draft.other_invoices = subiekt.client_invoices(lookup.documents(), client.nip)
             except subiekt.SubiektError as e:
                 draft.body, draft.problem = None, str(e)
         drafts.append(draft)
     return drafts
+
+
+def _bank_account():
+    return {'name': settings.SUBIEKT_BANK_ACCOUNT_NAME, 'number': settings.SUBIEKT_BANK_ACCOUNT_NUMBER}
 
 
 def _create(draft, month, signature, confirmed):

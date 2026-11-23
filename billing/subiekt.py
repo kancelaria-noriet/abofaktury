@@ -334,18 +334,21 @@ def _date(value):
     return f'{value.isoformat()}T00:00:00'
 
 
-def build_invoice(result, subiekt_client, products, issuer, issue_date, place=''):
+def build_invoice(result, subiekt_client, products, issuer, issue_date, place='', bank_account=None):
     """The body of POST /documents for one calculated invoice (calc.Result). Pure, no API calls.
 
     The settings copy the practice of the accounting firm: a KSeF invoice, bank transfer, net
     calculation, a domestic sale (SK), sale date = tax date = issue date, payment due in 7 days.
     The API requires the "payments" field (a missing field is an error, an empty list is accepted). A KZP
     "tylko VAT" adds a payment of its net amount, so only the VAT is left to pay.
+    bank_account is {'name': ..., 'number': ...}. The API does not fill in the default account of the web UI.
     """
     if not result.lines:
         raise SubiektError('faktura nie ma pozycji')
     if not issuer:
         raise SubiektError('brak wystawcy faktury (SUBIEKT_ISSUER)')
+    if not (bank_account or {}).get('number'):
+        raise SubiektError('brak rachunku bankowego (SUBIEKT_BANK_ACCOUNT_NUMBER)')
     items = []
     for number, line in enumerate(result.lines, 1):
         symbol = PRODUCT_SYMBOLS.get(line.name)
@@ -369,6 +372,7 @@ def build_invoice(result, subiekt_client, products, issuer, issue_date, place=''
         'issuer': issuer,
         'calculationMethod': 'Net',
         'paymentMethod': 'BankTransfer',
+        'bankAccount': {'name': bank_account.get('name') or None, 'number': bank_account['number']},
         'splitPayment': 'False',
         'communityTransaction': 'SK',
         'issueDate': _date(issue_date),
