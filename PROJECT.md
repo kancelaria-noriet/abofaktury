@@ -18,8 +18,8 @@ To do - fill in after the demo feedback. Short version for now:
 - `billing/source.py`: the source of the entries. The Google Sheet (read-only service account, one
   `values:batchGet` per page) and a pure parser `parse_tab()`. A problem with one
   tab becomes a warning for that client. A problem with the whole sheet shows a message on the page.
-- `billing/views.py` and the templates: the month view (all clients on one page) and the PDF report
-  (WeasyPrint).
+- `billing/views.py` and the templates: the month view (all clients on one page) and the PDF report of the hours
+  (WeasyPrint; no cost rows, a "Razem" total).
 - `billing/models.py`: the client config (Django admin).
 - `billing/subiekt.py`: the Subiekt 123 API. OAuth 2.0 with PKCE at kontoapi.insert.com.pl, the tokens in
   `SubiektConnection` (one row, not in the admin), refresh, the client and product lookup, and the invoice:
@@ -28,7 +28,8 @@ To do - fill in after the demo feedback. Short version for now:
   bank accounts and does not use the default account of the web UI, so the account comes from the settings.
 - `billing/gmail.py` and `billing/mailing.py`: the Gmail connection (OAuth with PKCE, a "Web application"
   client, the callback `/gmail/callback` checks the `state`; scope `gmail.send`) and the email with the
-  invoice and the report. The text is in `templates/billing/email/`. `EmailSend` logs every email. A test
+  invoice and the report. The text is in `templates/billing/email/`: `body.txt` and `body.html` (the same
+  content), and `logo.jpg`, which goes into the email as an inline image (CID), not as a remote link. `EmailSend` logs every email. A test
   mode sends only to a test address.
 - Every page needs a login (`LoginRequiredMiddleware`). The admin login form is the login page. Only
   `/privacy` and `/healthz` are public. Every view that changes data accepts only POST with CSRF.

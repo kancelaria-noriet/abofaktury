@@ -1,6 +1,17 @@
-{% autoescape off %}Dzień dobry,
+{% autoescape off %}Szanowni Państwo!
+W załączeniu przesyłamy fakturę za obsługę prawną Państwa firmy.
+Informujemy przy tym, że faktura jest wystawiona w systemie KSeF, a załączony PDF stanowi jej podgląd.
 
-w załączeniu przesyłamy fakturę nr {{ number }} oraz raport godzin za {{ work_month.label }}.
+Serdecznie prosimy o terminowe dokonanie zapłaty.
 
-Z poważaniem,
-Kancelaria Noriet{% endautoescape %}
+W razie pytań lub wątpliwości pozostajemy do Państwa dyspozycji.
+
+-- 
+Z poważaniem
+
+Kancelaria Prawna Noriet – Zagajewska i Wspólnicy S.K.A.
+tel: 22 870 66 46
+ul. Grochowska 217/15
+04-077 Warszawa
+NIP: 1132785145
+https://noriet.pl{% endautoescape %}

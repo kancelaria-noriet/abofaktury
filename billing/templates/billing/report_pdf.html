@@ -11,6 +11,7 @@
     th { background: #e8e8e8; font-weight: bold; }
     .hours { width: 28mm; text-align: right; white-space: nowrap; }
     tr { page-break-inside: avoid; }
+    .total td { font-weight: bold; }
   </style>
 </head>
 <body>
@@ -22,14 +23,18 @@
       </tr>
     </thead>
     <tbody>
-      {% for entry in result.entries %}
+      {% for entry in result.hour_entries %}
       <tr>
-        <td>{{ entry.description }}{% if entry.expense is not None %} - {{ entry.expense|floatformat:"2g" }} zł{% endif %}</td>
+        <td>{{ entry.description }}</td>
         <td class="hours">{% if entry.hours is not None %}{{ entry.hours|floatformat:"-1" }}{% elif entry.raw_hours is not None %}{{ entry.raw_hours }}{% endif %}</td>
       </tr>
       {% empty %}
       <tr><td colspan="2">Brak wpisów.</td></tr>
       {% endfor %}
+      <tr class="total">
+        <td>Razem</td>
+        <td class="hours">{{ result.hours_total|floatformat:"-1" }}</td>
+      </tr>
     </tbody>
   </table>
 </body>

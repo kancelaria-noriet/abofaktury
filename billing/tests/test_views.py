@@ -162,3 +162,21 @@ class ViewTests(FakeSheetMixin, TestCase):
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertIn('raport_alfa_2026-09.pdf', response['Content-Disposition'])
         self.assertTrue(response.content.startswith(b'%PDF'))
+
+    def test_report_has_only_hours_and_a_total(self):
+        from billing.calc import Month
+        from billing.models import Client
+        from billing.views import _results
+        from django.template.loader import render_to_string
+
+        def report(key):
+            [(client, result)] = _results([Client.objects.get(key=key)], Month(2026, 11))
+            return render_to_string('billing/report_pdf.html', {'client': client, 'result': result})
+
+        beta = report('beta')   # "wniosek o uzasadnienie": 1 h and a cost of 100 zł in one row
+        self.assertIn('wniosek o uzasadnienie', beta)
+        self.assertNotIn('zł', beta)
+        self.assertRegex(beta, r'Razem</td>\s*<td class="hours">5</td>')
+        gamma = report('gamma')   # a KZP row is a cost
+        self.assertNotIn('KZP', gamma)
+        self.assertRegex(gamma, r'Razem</td>\s*<td class="hours">21</td>')

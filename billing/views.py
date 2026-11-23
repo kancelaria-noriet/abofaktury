@@ -495,7 +495,8 @@ class EmailRow:
         else:
             self.number = invoice.document_number if invoice else ''
             self.send_to = self.recipients
-        self.subject, self.text = mailing.subject_and_text(self.number, month, result.work_month, client, test)
+        self.subject, self.text, self.html = mailing.subject_and_body(self.number, month, result.work_month,
+                                                                       client, test)
         self.invoice_filename = mailing.invoice_filename(self.number or 'brak')
         self.report_filename = mailing.report_filename(result.work_month)
 
@@ -613,7 +614,8 @@ def email_batch_send(request, month):
             invoice_pdf = test_pdf if row.test else subiekt.document_pdf(row.invoice.document_id)
             attachments = [(row.invoice_filename, invoice_pdf),
                            (row.report_filename, _report_pdf(request, row.client, row.result))]
-            message = mailing.build_message(settings.EMAIL_FROM, row.send_to, row.subject, row.text, attachments)
+            message = mailing.build_message(settings.EMAIL_FROM, row.send_to, row.subject, row.text, row.html,
+                                            attachments)
             message_id = gmail.send(message)
         except gmail.NotConnected as e:
             messages.error(request, f'{name}: nie wysłano: {e}. Pozostałe e-maile też nie zostały wysłane.')

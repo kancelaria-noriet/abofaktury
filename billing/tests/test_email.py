@@ -78,17 +78,26 @@ def connect_gmail(expires_in=3600):
 class MessageTests(TestCase):
     def test_message(self):
         work = Month(2026, 10)
-        subject, text = mailing.subject_and_text('FS 12/11/2026', Month(2026, 11), work, None, test=True)
+        subject, text, html = mailing.subject_and_body('FS 12/11/2026', Month(2026, 11), work, None, test=True)
         self.assertEqual(subject, '[TEST] Faktura FS 12/11/2026 – listopad 2026')
-        self.assertIn('fakturę nr FS 12/11/2026 oraz raport godzin za październik 2026', text)
+        self.assertIn('faktura jest wystawiona w systemie KSeF', text)
+        self.assertIn('\n-- \nZ poważaniem', text)   # the signature separator keeps its space
+        self.assertIn('https://noriet.pl', text)
+        self.assertNotIn('www.', text + html)
+        self.assertIn('src="cid:logo@noriet.pl"', html)
         raw = mailing.build_message('Kancelaria <faktury@example.com>', ['a@example.com', 'b@example.com'],
-                                    subject, text, [(mailing.invoice_filename('FS 12/11/2026'), b'%PDF-1'),
+                                    subject, text, html, [(mailing.invoice_filename('FS 12/11/2026'), b'%PDF-1'),
                                                     (mailing.report_filename(work), b'%PDF-2')])
         message = email.message_from_bytes(raw, policy=email.policy.default)
         self.assertEqual(message['To'], 'a@example.com, b@example.com')
         self.assertEqual(message['Subject'], subject)
         self.assertEqual([part.get_filename() for part in message.iter_attachments()],
                          ['Faktura FS 12-11-2026.pdf', 'Raport godzin - październik 2026.pdf'])
+        self.assertEqual(message.get_body(('plain',)).get_content(), text)
+        self.assertIn('Szanowni Państwo!', message.get_body(('html',)).get_content())
+        [logo] = [part for part in message.walk() if part.get_content_type() == 'image/jpeg']
+        self.assertEqual(logo['Content-ID'], '<logo@noriet.pl>')
+        self.assertEqual(logo.get_payload(decode=True), mailing.LOGO.read_bytes())
 
 
 class GmailConnectionTests(GmailFileMixin, DjangoTestCase):

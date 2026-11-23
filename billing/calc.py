@@ -79,6 +79,7 @@ class Entry:
     warning: str | None = None
     cell: str = ''                    # A1 reference in the sheet, empty for the demo file
     kzp: str | None = None            # KZP_VAT_ONLY or KZP_FULL for a KZP row with an amount
+    cost: bool = False                # a cost row (KOSZT column or KZP): not in the hours report
 
 
 @dataclass
@@ -127,6 +128,11 @@ class Result:
     def settlement(self):
         """True if this invoice settles the overtime of the period."""
         return self.work_month.month % self.period == 0
+
+    @property
+    def hour_entries(self):
+        """The entries of the hours report: all except the costs (those are invoice lines)."""
+        return [entry for entry in self.entries if not entry.cost]
 
     @property
     def period_hours(self):
@@ -213,6 +219,7 @@ def parse_entry(raw):
 
     # KZP (PLAN.md 4.2): the description starts with "KZP", the net amount is in the KOSZT column.
     if _KZP_START.match(description):
+        entry.cost = True
         amount = _to_decimal(raw_expense) if raw_expense is not None else None
         if raw_expense is None:
             _warning(entry, f'KZP bez kwoty w kolumnie KOSZT: „{description}”')
@@ -226,6 +233,7 @@ def parse_entry(raw):
         _warning(entry, f'Czy to KZP? Opis nie zaczyna się od „KZP”: „{description}”')
 
     if raw_expense is not None:
+        entry.cost = True
         amount = _to_decimal(raw_expense)
         if amount is None or amount < 0:
             _warning(entry, f'Nieprawidłowa kwota kosztu „{raw_expense}”: „{description}”')
