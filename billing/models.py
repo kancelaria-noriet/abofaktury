@@ -61,6 +61,12 @@ class Client(models.Model):
         blank=True,
         help_text='Adresy, na które aplikacja wysyła fakturę i raport. Kilka adresów oddziel przecinkami.',
     )
+    send_hour_reports = models.BooleanField(
+        'wysyłaj raporty godzin w PDF',
+        default=True,
+        help_text='Bez zaznaczenia e-mail z fakturą nigdy nie ma raportu godzin. '
+                  'Pusty raport (brak godzin w miesiącu) nie jest wysyłany nigdy.',
+    )
     active = models.BooleanField('aktywny', default=True)
 
     class Meta:

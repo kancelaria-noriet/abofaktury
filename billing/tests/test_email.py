@@ -246,6 +246,22 @@ class EmailBatchTests(GmailFileMixin, FakeSheetMixin, CredentialsMixin, DjangoTe
         self.assertEqual(self.api.count('POST', '/documents/test-doc/printing'), 1)   # once for the batch
         self.assertEqual(self.api.count('POST', '/documents/doc-g/printing'), 0)      # no real invoice PDF
 
+    @override_settings(EMAIL_TEST_RECIPIENT='tester@example.com')
+    def test_no_report_when_turned_off_or_empty(self):
+        Client.objects.filter(key='beta').update(send_hour_reports=False)
+        self.tabs = {**TABS, 'Delta_2026': make_tab({10: [('opłata sądowa', None, 100)]})}   # only a cost
+        page, rows = self.preview()
+        self.assertEqual((rows['beta'].report_filename, rows['beta'].no_report),
+                         (None, 'raporty wyłączone w konfiguracji klienta'))
+        self.assertEqual((rows['delta'].report_filename, rows['delta'].no_report), (None, 'raport jest pusty'))
+        self.assertIsNotNone(rows['gamma'].report_filename)
+        self.assertContains(page, 'bez raportu: raport jest pusty')
+        self.send(['beta', 'gamma', 'delta'])
+        # All three go to the test address: only Gamma's email has the report.
+        names = sorted([part.get_filename() for part in message.iter_attachments()] for message in self.google.sent)
+        self.assertEqual(names, [['Faktura FS 9-10-2026.pdf'], ['Faktura FS 9-10-2026.pdf'],
+                                 ['Faktura FS 9-10-2026.pdf', 'Raport godzin - październik 2026.pdf']])
+
     def test_normal_mode_needs_an_invoice_in_ksef_and_recipients(self):
         self.add_invoice()
         _, rows = self.preview()

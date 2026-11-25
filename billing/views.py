@@ -498,7 +498,13 @@ class EmailRow:
         self.subject, self.text, self.html = mailing.subject_and_body(self.number, month, result.work_month,
                                                                        client, test)
         self.invoice_filename = mailing.invoice_filename(self.number or 'brak')
-        self.report_filename = mailing.report_filename(result.work_month)
+        # The hours report goes with the invoice only if the client wants it and it has rows.
+        if not client.send_hour_reports:
+            self.report_filename, self.no_report = None, 'raporty wyłączone w konfiguracji klienta'
+        elif not result.hour_entries:
+            self.report_filename, self.no_report = None, 'raport jest pusty'
+        else:
+            self.report_filename, self.no_report = mailing.report_filename(result.work_month), None
 
     @property
     def can_send(self):
@@ -612,8 +618,9 @@ def email_batch_send(request, month):
             continue
         try:
             invoice_pdf = test_pdf if row.test else subiekt.document_pdf(row.invoice.document_id)
-            attachments = [(row.invoice_filename, invoice_pdf),
-                           (row.report_filename, _report_pdf(request, row.client, row.result))]
+            attachments = [(row.invoice_filename, invoice_pdf)]
+            if row.report_filename:
+                attachments.append((row.report_filename, _report_pdf(request, row.client, row.result)))
             message = mailing.build_message(settings.EMAIL_FROM, row.send_to, row.subject, row.text, row.html,
                                             attachments)
             message_id = gmail.send(message)

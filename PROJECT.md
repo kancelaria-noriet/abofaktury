@@ -29,7 +29,9 @@ To do - fill in after the demo feedback. Short version for now:
 - `billing/gmail.py` and `billing/mailing.py`: the Gmail connection (OAuth with PKCE, a "Web application"
   client, the callback `/gmail/callback` checks the `state`; scope `gmail.send`) and the email with the
   invoice and the report. The text is in `templates/billing/email/`: `body.txt` and `body.html` (the same
-  content), and `logo.jpg`, which goes into the email as an inline image (CID), not as a remote link. `EmailSend` logs every email. A test
+  content), and `logo.jpg`, which goes into the email as an inline image (CID), not as a remote link.
+  The hours report is attached only if the client has "wysyłaj raporty godzin w PDF" on (the default) and
+  the report has rows. `EmailSend` logs every email. A test
   mode sends only to a test address.
 - Every page needs a login (`LoginRequiredMiddleware`). The admin login form is the login page. Only
   `/privacy` and `/healthz` are public. Every view that changes data accepts only POST with CSRF.

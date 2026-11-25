@@ -35,7 +35,7 @@
           {{ row.send_to|join:", "|default:"—" }}
           {% if row.test %}<br><span class="muted small">prawdziwi odbiorcy: {{ row.recipients|join:", "|default:"brak" }}</span>{% endif %}
         </td>
-        <td>{{ row.subject }}<br><span class="muted small">{{ row.invoice_filename }}, {{ row.report_filename }}</span></td>
+        <td>{{ row.subject }}<br><span class="muted small">{{ row.invoice_filename }}{% if row.report_filename %}, {{ row.report_filename }}{% else %} (bez raportu: {{ row.no_report }}){% endif %}</span></td>
         <td>
           {% if row.problem %}<span class="missing">{{ row.problem }}</span>{% endif %}
           {% if row.last_send %}
